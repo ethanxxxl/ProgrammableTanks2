@@ -1,0 +1,78 @@
+#+TITLE: Programable Tanks 2
+
+* Overview
+this is my second attempt to create a game/simulation of AI tank combat.
+
+in my last attempt, I was bogged down with creating a graphics frontend first
+and then attaching the logic to the backend. I never really got around to
+implementing the logic because of this.
+
+With this project, I will start with creating the game logic/backend first, then
+add the graphics front end. To visualize what is going on, I will certainly
+implement a simple TUI.
+
+* Core Constructs
+To start, the scope of these core concepts will be constrained. The mechanics
+will be similar to the online MMO Screeps.
+
+** Tanks
+can have different attributes which give it abilities.
+- Movement
+- Attack
+- Cargo
+- Sensor Packages
+
+** World
+A map of the world does not necessarily need to be maintained. However, a list
+of world objects will need to be maintained.
+
+position updates and actions will need to be validated to ensure there are no
+conflicts or intersections.
+
+** Threading
+This program will be multithreaded. Threads may be used to send commands, run
+callbacks, etc.
+
+*** World Update Thread
+every game tick, all world object positions will be updated.
+
+*** Networking Thread
+connected clients need to be able to receive game information from the server
+and send updates to the server.
+
+Unlike Screeps, where all processing is done on the server, Programable Tanks
+will use distributed computation. For a player's game objects to be updated, the
+client must send the updates to the server. Of course, these updates will be
+validated to ensure that no nefarious activity is performed by the player.
+
+*** Server Graphics Thread
+
+* Networking
+This is meant to be a multiplayer game/simulation. While all player operations
+will be validated by the server, the processing required to determine those
+moves must be done by the clients.
+
+The messages that may be sent over the network to exchange information are
+described in this section.
+
+** Client Connection Request
+for now, clients will self-identify, and no authentication will be done. In the
+future, there should be some sort of traffic encryption and authentication to
+protect OPSEC for individual players.
+
+** Client Map Request
+client requests map data from the server. The server will provide all map
+information. Future iterations of the sim may limit the amount of the map that
+is revealed; visible portions may be limited by the player's area of control.
+
+for now, the server will provide a *complete listing of game object locations*.
+
+** Client Update Request
+the client will update parameters on specific game objects.
+
+** Server Validation Response
+The server sends this message in response to a position update request. This
+response indicates whether the proposed update was accepted.
+
+The server should enumerate which game object updates were valid and which ones
+were invalid.
