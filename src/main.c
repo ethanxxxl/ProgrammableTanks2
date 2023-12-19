@@ -1,4 +1,5 @@
 #include "message.h"
+#include "player_manager.h"
 #include <SDL2/SDL.h>
 #include <stddef.h>
 #include <stdio.h>
@@ -41,38 +42,14 @@ const int SCREEN_HEIGHT = 480;
 //
 //    return 0;
 //}
-
+#include <scenario.h>
 #include <tank.h>
 #include <message.h>
 #include <pthread.h>
 #include <fcntl.h>
 
-struct client {
-    int socket;
-    socklen_t size;
-    struct sockaddr address;
-    
-    bool authenticated;
-    char username[50];
-};
-
-// requests username and determines if the user should be allowed to
-// enter the game. If the user is valid, then a new client structure
-// is allocated. Otherwise, NULL is returned.
-bool authenticate_connection(struct client* client, struct client_message *credentials) {
-    // TODO add some sort of credential validation.
-    // for now, just set the username and set the authenticated flag.
-    if (credentials->msg_type != CLIENT_USER_CREDENTIALS)
-	return false;
-    
-    client->authenticated = true;
-    strcpy(client->username, credentials->user_credentials.username);
-
-    return true;
-}
-
 bool g_run;
-struct client *g_connections[50];
+struct player_manager* g_connections[50];
 int g_connections_len;
 
 
@@ -111,21 +88,21 @@ void *accept_connections_thread(void* arg) {
 	// set the connection to nonblocking
 	fcntl(client_fd, F_SETFL, O_NONBLOCK);
 
-	struct client *new_client;
-	new_client = malloc(sizeof(struct client));
-	if (new_client == NULL) {
+	struct player_manager *new_player;
+	new_player = malloc(sizeof(struct player_manager));
+	if (new_player == NULL) {
 	    perror("ERROR! COULDN'T MALLOC FOR NEW CLIENT");
 	    continue;
 	}
 
-	new_client->size = client_size;
-	new_client->address = client_addr;
-	new_client->socket = client_fd;
+	new_player->size = client_size;
+	new_player->address = client_addr;
+	new_player->socket = client_fd;
 
-	//FIXME allocated memory never freed!
+	// FIXME: allocated memory never freed!
     
 	printf("recieved a new connection!\n");
-	g_connections[g_connections_len] = new_client;
+	g_connections[g_connections_len] = new_player;
 	g_connections_len += 1;
     }
 
@@ -134,46 +111,42 @@ void *accept_connections_thread(void* arg) {
 }
 
 
-// BUG!!! there is a potential race condition here. If a client with
-// the same credentials attempts to enter the game while the old
-// client is being handled, the old clients memory will be freed out
-// from under it!
-void handle_client(struct client* client) {
-    struct client_message msg;
+// BUG: there is a potential race condition here. If a client with the same
+// credentials attempts to enter the game while the old client is being handled,
+// the old clients memory will be freed out from under it!
+
+/// top level client handling function that recieves all messages from the
+/// clients, and passes them to the appropriate handler (depends on the state of
+/// the client)
+void handle_client(struct player_manager* p) {
+    struct message msg;
     // FIXME this should probably be changed to a non-blocking read.
-    int status = recv_client_message(client->socket, &msg);
+    int status = recv_message(p->socket, &msg);
 
     // return if nothing was read.
     if (status < 0)
 	return;
 
-    // TODO handle all cases of the message
-    if (msg.msg_type != CLIENT_USER_CREDENTIALS &&
-	!client->authenticated) {
-	// can't do anything unless the client is authenticated.
-	return;
+    switch (p->state) {
+    case STATE_DISCONNECTED:
+	break;
+    case STATE_IDLE:
+	player_idle_handler(p, msg);
+	break;
+    case STATE_LOBBY:
+	player_lobby_handler(p, msg);
+	break;
+    case STATE_SCENARIO:
+	player_scenario_handler(p, msg);
+	break;
     }
 
-    switch (msg.msg_type) {
-    case CLIENT_USER_CREDENTIALS: {
-	bool result = authenticate_connection(client, &msg);
+    if (msg.type == MSG_REQUEST_DEBUG) {
+	printf("%s: %s\n", p->username, msg.debug_msg);
 	
-	if (result)
-	    printf("%s: authenticated\n", client->username);
-	
-	break;
-    }
-    case CLIENT_DEBUG_MESSAGE: {
-	printf("%s: %s\n", client->username, msg.debug_msg);
-	
-       	if (strcmp(msg.debug_msg, "kill-serv") == 0) {
-	    g_run = false;
-	}
-	break;
-    }
-    case CLIENT_REQUEST_WORLD: 
-    case CLIENT_PROPOSE_UPDATE:
-	printf("ERROR: UNSUPPORTED OPERATION\n");
+        if (strcmp(msg.debug_msg, "kill-serv") == 0) {
+            g_run = false;
+        }
     }
 }
 
@@ -188,6 +161,7 @@ void* client_request_thread(void *arg) {
 
     return NULL;
 }
+
 int main(int argc, char** argv) {
     // structure initialization
     init_tank_list(50);

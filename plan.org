@@ -23,7 +23,7 @@ can have different attributes which give it abilities.
 - Sensor Packages
 
 ** World
-A map of the world does not necessarily need to be maintained. However, a list
+   A map of the world does not necessarily need to be maintained. However, a list
 of world objects will need to be maintained.
 
 position updates and actions will need to be validated to ensure there are no
@@ -47,13 +47,102 @@ validated to ensure that no nefarious activity is performed by the player.
 
 *** Server Graphics Thread
 
-* Networking
+* Gameplay
+  tanks are the fundamental unit to this game. They are remote controlled, yet
+  programable. That is, once spawned, a tank will not do anything on its
+  own. Every tick, it must be given instructions. The player may submit
+  instructions over the network as frequent or infrequently as they desire.
+
+  
+   - establish production?
+   - control zones?
+   - fight battles?
+
+   Perhaps the gameplay could be modeled after =Escape from Tarkov=, or =Dayz=.
+   No production would have to be constantly monitored, and there could be a
+   variety of different game modes.
+
+   You could have different "rooms," "scenarios," "insertion points,"
+   etc. essentially these would be different coordinate spaces for tanks, and is
+   where any given scenario would run. You would be given information about the
+   scenario before hand, and you would have to prep your tank team
+   accordingly. Once inserted, your tank team would not be able to recieve
+   resupply, and would have to complete the mission the be extracted. players
+   would always have a certain number of basic tanks, /but upgrades could be
+   found on the battle field and be equipped between scenarios./ (This mechanic,
+   sourced from escape from tarkov, may or may not be necessary.)
+
+   players would want to write scripts to control their tanks, and allow them to
+   manage the battlefield semi autonomously. The battlefields will be relatively
+   large, and ticks ideally would occur relatively often, so the tank commander
+   will want to have strategic level control at game time. tactical level
+   control should be controled programmatically.
+
+** Scenarios or Battlefields
+   not entirely sure about the nomenclature just yet. A battlefield may have
+   multiple objectives available. Only one objective will be shown per
+   player. An objective may be to defend a certain object or area, or perhaps
+   the objective is to take that area. multiple players will enter the
+   battlefield, and their objectives may or may not conflict with each
+   other. However, the possible number of objectives will be fixed, so players
+   can develop programs for specific objectives.
+
+
+** Objectives
+   These are the objectives that will be available to players in any given
+   battlefield.
+   
+*** Defend / Destroy Structure
+    
+*** Capture the Flag
+
+*** Kill Enenmy Tanks
+
+* Program Structure
+  
+** Connection Manager
+   Initial layer, where incoming connections and data packets are recieved and
+   deserialized. Once the deserialization and post processing is done, the
+   resulting data is sent to the client manager layer.
+
+** Player Client Manager
+   After the packet has been reconstructed and is passed to this layer, player
+   managers will track the state of a player (what scenario are they in, player
+   data, etc.) and handle the messages that the player is sending the server.
+
+** Scenario Manager
+   If the player is in a scenario, then scenario messages will be sent to the
+   applicable scenario layer to be validated and applied. It is in the scenario
+   where tank positions will be updated or scheduled.
+    
+* Networking API
 This is meant to be a multiplayer game/simulation. While all player operations
 will be validated by the server, the processing required to determine those
 moves must be done by the clients.
 
 The messages that may be sent over the network to exchange information are
 described in this section.
+
+Every client connected to the server will have its state tracked. When a network
+connection is made to the server, it must first authenticate itself as a
+particular user before any other messages will be accepted. *for now, it is
+sufficient to simply provide a name, there is no security.* 
+
+** Connection State Diagram
+*** STATE_IDLE
+    this state is used for "players" who have made a network connection to the
+    server, but have yet to be authenticated. The only way to move out of this
+    state is to send an authenticate message which provides the user
+    authentication.
+    
+*** STATE_LOBBY
+    The player has been authenticated and can view all the scenarios which are
+    currently active, join a scenario, or create a new scenario.
+
+    
+*** STATE_SCENARIO
+    After creating or joining a scenario, the player can do normal gameplay
+    things. 
 
 ** Client Connection Request
 for now, clients will self-identify, and no authentication will be done. In the
