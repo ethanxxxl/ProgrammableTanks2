@@ -23,26 +23,49 @@ int make_vector(struct vector *vec, size_t elem_len, int size_hint) {
 
 int free_vector(struct vector *vec) {
     free(vec->data);
+    vec->data = NULL;
+    return 0;
+}
+
+int vec_reserve(struct vector *vec, int n) {
+    if (vec->capacity > n)
+	return 0;
+
+    // reserve twice as much as requested, to reduce reallocs.
+    void *tmp = realloc(vec->data, n*2);
+    
+    if (tmp == NULL) {
+	return -1;
+    }
+
+    vec->data = tmp;
+    vec->capacity = n*2;
+
     return 0;
 }
 
 int vec_push(struct vector *vec, const void *src) {
-    if (vec->capacity <= vec->len) {
-	void *tmp = realloc(vec->data, vec->capacity * 2);
-
-	if (tmp == NULL) {
-	    return -1;
-	}
-
-	vec->data = tmp;
-	vec->capacity *= 2;
-    }
-
+    vec_reserve(vec, vec->len+1);
+    
     memcpy(vec_ref(vec, vec->len),
 	   src, vec->element_len);
 
     vec->len++;
 
+    return 0;
+}
+
+int vec_pushn(struct vector *vec, const void *src, int n) {
+    vec_reserve(vec, vec->len+n);
+
+    memcpy(vec_ref(vec, vec->len), src, n * vec->element_len);
+    vec->len += n;
+    return 0;
+}
+
+int vec_resize(struct vector *vec, int n) {
+    vec_reserve(vec, n);
+    vec->len = n;
     return 0;
 }
 

@@ -43,15 +43,21 @@ const int SCREEN_HEIGHT = 480;
 //    return 0;
 //}
 #include <scenario.h>
-#include <tank.h>
 #include <message.h>
 #include <pthread.h>
 #include <fcntl.h>
 
 bool g_run;
-struct player_manager* g_connections[50];
+
+struct {
+    struct player_manager* client;
+    struct vector msg_buf;
+} g_connections[50];
+
 int g_connections_len;
 
+// TODO: should eventually support multiple scenarios
+struct scenario g_scenario;
 
 void *accept_connections_thread(void* arg) {
     // create a socket
@@ -72,8 +78,6 @@ void *accept_connections_thread(void* arg) {
         perror("ERROR: couldn't bind socket.");
         exit(EXIT_FAILURE);
     }
-
-
  
     // enable listening
     listen(sock, 1);
@@ -98,11 +102,13 @@ void *accept_connections_thread(void* arg) {
 	new_player->size = client_size;
 	new_player->address = client_addr;
 	new_player->socket = client_fd;
+	new_player->state = STATE_IDLE;
 
 	// FIXME: allocated memory never freed!
-    
-	printf("recieved a new connection!\n");
-	g_connections[g_connections_len] = new_player;
+    	printf("recieved a new connection!\n");
+	g_connections[g_connections_len].client = new_player;
+	make_vector(&g_connections[g_connections_len].msg_buf,
+		    sizeof(char), 10);
 	g_connections_len += 1;
     }
 
@@ -118,15 +124,20 @@ void *accept_connections_thread(void* arg) {
 /// top level client handling function that recieves all messages from the
 /// clients, and passes them to the appropriate handler (depends on the state of
 /// the client)
-void handle_client(struct player_manager* p) {
+void handle_client(struct player_manager* p, struct vector *msg_buf) {
     struct message msg;
-    // FIXME this should probably be changed to a non-blocking read.
-    int status = recv_message(p->socket, &msg);
-
+    int status = recv_message(p->socket, &msg, msg_buf);
+    
     // return if nothing was read.
-    if (status < 0)
-	return;
-
+    if (status == -1) {
+        return;
+    }
+    
+    print_player(p);
+    printf("--RECEIVED--\n");
+    // XXX: debug message.
+    print_message(msg);
+    
     switch (p->state) {
     case STATE_DISCONNECTED:
 	break;
@@ -140,7 +151,7 @@ void handle_client(struct player_manager* p) {
 	player_scenario_handler(p, msg);
 	break;
     }
-
+    
     if (msg.type == MSG_REQUEST_DEBUG) {
 	printf("%s: %s\n", p->username, msg.debug_msg);
 	
@@ -148,6 +159,9 @@ void handle_client(struct player_manager* p) {
             g_run = false;
         }
     }
+
+    free_message(msg);
+    return;
 }
 
 // this function handles all requests from clients.
@@ -155,7 +169,8 @@ void* client_request_thread(void *arg) {
     while (g_run) {	
 	// you will handle stuff here, like printing debug messages!
 	for (int i = 0; i < g_connections_len; i++) {
-	    handle_client(g_connections[i]);
+	    handle_client(g_connections[i].client,
+			  &g_connections[i].msg_buf);
 	}
     }
 
@@ -163,9 +178,6 @@ void* client_request_thread(void *arg) {
 }
 
 int main(int argc, char** argv) {
-    // structure initialization
-    init_tank_list(50);
-
     // start networking thread
 
     g_run = true;
@@ -181,7 +193,6 @@ int main(int argc, char** argv) {
 		   NULL,
 		   &client_request_thread,
 		   NULL);
-
 
     // run updates.
     while (g_run);

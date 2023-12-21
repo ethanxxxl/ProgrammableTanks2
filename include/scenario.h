@@ -1,9 +1,11 @@
 #ifndef SCENARIO_H
 #define SCENARIO_H
 
-#include <tank.h>
 #include <player_manager.h>
 #include <vector.h>
+
+// the global scenario
+extern struct scenario g_scenario;
 
 struct new_tank {
     int x,y;
@@ -12,10 +14,10 @@ struct new_tank {
 };
 
 enum SCENARIO_OBJECTIVES {
-  DEFEND_POSITION,
-  ATTACK_POSITION,
-  KILL_PLAYERS,
-  OBSERVER,
+    DEFEND_POSITION,
+    ATTACK_POSITION,
+    KILL_PLAYERS,
+    OBSERVER,
 };
 
 #define TANKS_IN_SCENARIO 36

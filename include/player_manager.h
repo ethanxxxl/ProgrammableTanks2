@@ -1,11 +1,9 @@
 #ifndef PLAYER_MANAGER_H
 #define PLAYER_MANAGER_H
 
-#include "message.h"
+#include <message.h>
 #include <stdbool.h>
 #include <sys/socket.h>
-
-
 
 struct ringbuffer {
     void* data;
@@ -40,6 +38,7 @@ struct player_manager {
 };
 
 int make_player(struct player_manager *p);
+void print_player(struct player_manager *p);
 
 // recieves player messages from the network, sends them to the
 // scenario

@@ -7,29 +7,32 @@
 CC = gcc
 CFLAGS = -Wall -g
 
-SRC_COMMON = src/tank.c src/message.c
+SRCDIR = src
+BUILDDIR = target
+
+SRC_COMMON = src/message.c src/player_manager.c src/vector.c
 
 SRC_SERVER = $(SRC_COMMON) src/main.c
 SRC_CLIENT = $(SRC_COMMON) src/client.c
 
-OBJ_COMMON = $(SRC_COMMON:.c=.o)
-OBJ_SERVER = $(SRC_SERVER:.c=.o)
-OBJ_CLIENT = $(SRC_CLIENT:.c=.o)
+OBJ_COMMON = $(patsubst $(SRCDIR)/%.c,$(BUILDDIR)/%.o,$(SRC_COMMON))
+OBJ_SERVER = $(patsubst $(SRCDIR)/%.c,$(BUILDDIR)/%.o,$(SRC_SERVER))
+OBJ_CLIENT = $(patsubst $(SRCDIR)/%.c,$(BUILDDIR)/%.o,$(SRC_CLIENT))
 
 OBJ = $(OBJ_COMMON) $(OBJ_SERVER) $(OBJ_CLIENT)
 
 INC = -I./include/
 LIB = -lSDL2 -lm -pthread
 
-all: server client
+all: $(BUILDDIR)/server $(BUILDDIR)/client
 
-server: $(OBJ_SERVER) 
-	$(CC) $(CFLAGS) $(LIB) $(INC) -o server $(OBJ_SERVER)
+$(BUILDDIR)/server: $(OBJ_SERVER) 
+	$(CC) $(CFLAGS) $(LIB) $(INC) -o $@ $(OBJ_SERVER)
 
-client: $(OBJ_CLIENT)
-	$(CC) $(CFLAGS) $(LIB) $(INC) -o client $(OBJ_CLIENT)
+$(BUILDDIR)/client: $(OBJ_CLIENT)
+	$(CC) $(CFLAGS) $(LIB) $(INC) -o $@ $(OBJ_CLIENT)
 
-%.o: %.c
+$(BUILDDIR)/%.o: $(SRCDIR)/%.c
 	$(CC) $(CFLAGS) $(LIB) $(INC) -c $< -o $@
 
 clean:

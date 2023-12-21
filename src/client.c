@@ -1,3 +1,5 @@
+#include <fcntl.h>
+#include <pthread.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <sys/socket.h>
@@ -20,6 +22,11 @@ const char HELP_STRING[] =
 bool g_run_program;
 int g_server_sock;
 
+int debug_send_msg(struct message msg) {
+    printf("--SENDING--\n");
+    print_message(msg);
+    return send_message(g_server_sock, msg);    
+}
 /*
  * Command Callback Functions
  */
@@ -32,16 +39,45 @@ void request_server_update(int argc, char **argv) {
     printf("requesting info from server...\n");
     printf("COMMAND FAILED: NOT IMPLEMENTED\n");
 }
-void add_tank(int argc, char **argv) {
+
+void authenticate(int argc, char **argv) {
+    struct message msg = {MSG_REQUEST_AUTHENTICATE};
     
+    // FIXME: hardcoded size.
+    strncpy(msg.user_credentials.username, argv[1], 50);
+    debug_send_msg(msg);
 }
-void help_page(int argc, char **arg) {
-    printf("%s", HELP_STRING);
+void change_state(int argc, char **argv) {
+    if (argc != 2) {
+	printf("ERROR: valid options are \"scene\" or \"lobby\"\n");
+	return;
+    }
+
+    struct message msg;
+    if (strcmp(argv[1], "scene") == 0) {
+        msg = (struct message){MSG_REQUEST_JOIN_SCENARIO};
+    } else if (strcmp(argv[1], "lobby") == 0) {
+	msg = (struct message){MSG_REQUEST_RETURN_TO_LOBBY};
+    } else {
+        printf("ERROR: valid options are \"scene\" or \"lobby\"\n");
+	return;
+    }
+
+    debug_send_msg(msg);
+    return;
 }
+void list_scenarios(int argc, char **argv) {
+    struct message msg = {MSG_REQUEST_LIST_SCENARIOS};
+    debug_send_msg(msg);
+}
+
+void add_tank(int argc, char **argv) {}
+
+void help_page(int argc, char **arg) { printf("%s", HELP_STRING); }
+
+
 void message_server(int argc, char **argv) {
-    struct client_message msg;
-    msg.msg_type = CLIENT_DEBUG_MESSAGE;
-    msg.debug_msg[0] = 0;
+    struct message msg = {MSG_REQUEST_DEBUG, .debug_msg = {0}};
 
     char* str_end = msg.debug_msg;
     for (int i = 1; i < argc; i++) {
@@ -52,9 +88,7 @@ void message_server(int argc, char **argv) {
     }
     *(str_end-1) = '\0'; // get rid of final space
 
-    printf("sending \"%s\" to server.\n", msg.debug_msg);
-
-    send_client_message(g_server_sock, &msg);
+    debug_send_msg(msg);
 }
 void command_error(int argc, char **argv) {
     printf("ERROR: Unknown Command \"%s\"\n", argv[0]);
@@ -62,6 +96,8 @@ void command_error(int argc, char **argv) {
 void quit(int argc, char **argv) {
     g_run_program = false;
 }
+
+void dummy(int arggc, char **argv) {}
 
 /*
  * Command Master List
@@ -76,8 +112,12 @@ const struct command {
     {"update", &propose_update},
     {"add-tank", &add_tank},
     {"request", &request_server_update},
+    {"auth", &authenticate},
+    {"change-state", &change_state},
+    {"list-scenarios", &list_scenarios},
     {"help", &help_page},
     {"msg", &message_server},
+    {"\n", &dummy},
     {"q", &quit},
     {"quit", &quit},
     {"exit", &quit},
@@ -100,6 +140,23 @@ void manage_commands(int argc, char** argv) {
     cmd->callback(argc, argv);
 }
 
+void* read_msg_thread(void* arg) {
+    struct message msg = {0};
+    struct vector msg_buf;
+    make_vector(&msg_buf, sizeof(char), 30);
+    fcntl(g_server_sock, F_SETFL, O_NONBLOCK);
+    
+    while (g_run_program) {
+        int status = recv_message(g_server_sock, &msg, &msg_buf);
+
+	if (status != -1) {
+	    print_message(msg);
+	    free_message(msg);
+	}
+    }
+
+    return NULL;
+}
 
 int main(int argc, char** argv) {    
     // create a socket
@@ -122,26 +179,20 @@ int main(int argc, char** argv) {
         perror("ERROR: couldn't connect to server.\n");
         exit(EXIT_FAILURE);
     }
-
-    struct client_message authenticate_msg = {
-	.msg_type = CLIENT_USER_CREDENTIALS,
-    };
-
-    if (argc >= 2) {
-	strcpy(authenticate_msg.user_credentials.username,
-	       argv[1]);
-    } else {
-	strcpy(authenticate_msg.user_credentials.username,
-	       "default");
-    }
-
-    send_client_message(g_server_sock, &authenticate_msg);
-
+    
     g_run_program = true;
     char* buff = malloc(50);
     size_t buff_size = 50;
+
+    pthread_t read_msg_pid;
+    pthread_create(&read_msg_pid,
+		   NULL,
+		   &read_msg_thread,
+		   NULL);
+    
+    
     while (g_run_program) {
-        printf("> ");
+        printf("\n> ");
         fflush(stdout);
 
         getline(&buff, &buff_size, stdin);
