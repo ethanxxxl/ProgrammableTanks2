@@ -27,6 +27,10 @@ int vec_pushn(struct vector *vec, const void *src, int n);
 int vec_resize(struct vector *vec, int n);
 
 int vec_pop(struct vector *vec, void *dst);
+
+/// removes the element at index n, and shifts following elelments.
+int vec_rem(struct vector *vec, int n);
+
 int vec_at(const struct vector *vec, int n, void *dst);
 void* vec_ref(const struct vector *vec, int n);
 

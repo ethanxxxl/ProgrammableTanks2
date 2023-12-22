@@ -70,9 +70,31 @@ int vec_resize(struct vector *vec, int n) {
 }
 
 int vec_pop(struct vector *vec, void *dst) {
-    memcpy(dst,
-	   vec_ref(vec, vec->len--),
-	   vec->element_len);
+    if (vec->len <= 0)
+	return -1;
+    
+    if (dst != NULL)
+	memcpy(dst, vec_ref(vec, vec->len), vec->element_len);
+
+    vec->len--;
+
+    return 0;
+}
+
+int vec_rem(struct vector *vec, int n) {
+    if (n > vec->len)
+	return -1;
+
+    if (n == vec->len - 1) {
+	vec_pop(vec, NULL);
+	return 0;
+    }
+    
+    memmove(vec_ref(vec, n),
+	    vec_ref(vec, n+1),
+	    (vec->len - n - 1) * vec->element_len);
+
+    vec->len--;
     
     return 0;
 }

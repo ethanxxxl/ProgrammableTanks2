@@ -10,9 +10,9 @@ CFLAGS = -Wall -g
 SRCDIR = src
 BUILDDIR = target
 
-SRC_COMMON = src/message.c src/player_manager.c src/vector.c
+SRC_COMMON = src/message.c src/vector.c 
 
-SRC_SERVER = $(SRC_COMMON) src/main.c
+SRC_SERVER = $(SRC_COMMON) src/main.c src/scenario.c src/player_manager.c 
 SRC_CLIENT = $(SRC_COMMON) src/client.c
 
 OBJ_COMMON = $(patsubst $(SRCDIR)/%.c,$(BUILDDIR)/%.o,$(SRC_COMMON))
