@@ -48,6 +48,7 @@ const int SCREEN_HEIGHT = 480;
 #include <fcntl.h>
 
 bool g_run;
+extern struct scenario g_scenario;
 
 struct {
     struct player_manager* client;
@@ -172,14 +173,18 @@ void* client_request_thread(void *arg) {
 	    handle_client(g_connections[i].client,
 			  &g_connections[i].msg_buf);
 	}
+
+	/* TEMPORARY (probably) SCENE HANDLING */
+	scenario_handler(&g_scenario);
     }
 
     return NULL;
 }
 
 int main(int argc, char** argv) {
+    make_scenario(&g_scenario);
+    
     // start networking thread
-
     g_run = true;
 
     pthread_t network_thread_pid;

@@ -160,6 +160,12 @@ int recv_message(int fd, struct message *msg, struct vector *buf) {
 	
         memmove(msg->user_credentials.username, buf->data + HEADER_SIZE, 50);
 	break;
+
+    case MSG_REQUEST_DEBUG:
+	vec_push(buf, "\0"); // ensure null termination.
+	vec_resize(buf, 50 + HEADER_SIZE);
+	memmove(msg->debug_msg, buf->data + HEADER_SIZE, 50);
+        break;
     default:
 	break;
     }

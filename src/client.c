@@ -123,7 +123,6 @@ const struct command {
     {"exit", &quit},
 };
 
-
 // call the appropriate callback function for the command passed in.
 void manage_commands(int argc, char** argv) {
     struct command const* cmd = COMMANDS;

@@ -1,8 +1,12 @@
+#include "scenario.h"
 #include <SDL2/SDL_shape.h>
 #include <player_manager.h>
 #include <message.h>
 #include <stdio.h>
 #include <string.h>
+
+
+extern struct scenario g_scenario;
 
 int make_player(struct player_manager *p) {
 
@@ -19,7 +23,11 @@ int player_idle_handler(struct player_manager *p, struct message msg) {
 
 	{
 	    char buf[50] = {0};
-	    snprintf(buf, 50, "authenticated %s.", p->username);
+	    int ret =
+		snprintf(buf, 50, "authenticated %s.", p->username);
+	    if (ret < 0)
+		return -1; // name was too large for the buffer.
+	    
 	    send_conf_message(p->socket, MSG_RESPONSE_SUCCESS,
 			      buf);
 	}
@@ -43,9 +51,11 @@ int player_lobby_handler(struct player_manager *p, struct message msg) {
 	break;
     case MSG_REQUEST_CREATE_SCENARIO:
 	break;
+	
     case MSG_REQUEST_JOIN_SCENARIO:
 	p->state = STATE_SCENARIO;
-	// TODO: add player to global scenario.
+
+        scenario_add_player(&g_scenario, p);
 	
 	send_conf_message(p->socket, MSG_RESPONSE_SUCCESS,
 			  "entering scenario...");
@@ -68,6 +78,7 @@ int player_scenario_handler(struct player_manager *p, struct message msg) {
 	// behavior.
 	
 	p->state = STATE_LOBBY;
+	scenario_rem_player(&g_scenario, p);
 
 	// TODO: remove player from global scenario.
 	send_conf_message(p->socket, MSG_RESPONSE_SUCCESS,

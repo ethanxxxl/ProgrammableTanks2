@@ -89,6 +89,7 @@ validated to ensure that no nefarious activity is performed by the player.
 
 
 ** Objectives
+   
    These are the objectives that will be available to players in any given
    battlefield.
    
@@ -97,6 +98,18 @@ validated to ensure that no nefarious activity is performed by the player.
 *** Capture the Flag
 
 *** Kill Enenmy Tanks
+
+
+    
+** Tank Mechanics
+   Every tick/turn, a tank can complete one of these (mutually
+   exclusive) actions:
+   - Movement
+   - Firing
+   - Repair
+
+     The server will resolve healing first, followed by movement, then firing.
+
 
 * Program Structure
   
