@@ -1,3 +1,4 @@
+#include "vector.h"
 #include <fcntl.h>
 #include <pthread.h>
 #include <stdbool.h>
@@ -25,7 +26,7 @@ int g_server_sock;
 int debug_send_msg(struct message msg) {
     printf("--SENDING--\n");
     print_message(msg);
-    return send_message(g_server_sock, msg);    
+    return message_send(g_server_sock, msg);    
 }
 /*
  * Command Callback Functions
@@ -43,8 +44,7 @@ void request_server_update(int argc, char **argv) {
 void authenticate(int argc, char **argv) {
     struct message msg = {MSG_REQUEST_AUTHENTICATE};
     
-    // FIXME: hardcoded size.
-    strncpy(msg.user_credentials.username, argv[1], 50);
+    vec_pushn(&msg.user_credentials.username, argv[1], strlen(argv[1]));
     debug_send_msg(msg);
 }
 void change_state(int argc, char **argv) {
@@ -77,16 +77,14 @@ void help_page(int argc, char **arg) { printf("%s", HELP_STRING); }
 
 
 void message_server(int argc, char **argv) {
-    struct message msg = {MSG_REQUEST_DEBUG, .debug_msg = {0}};
+    struct message msg = {MSG_REQUEST_DEBUG};
+    make_vector(&msg.text, sizeof(char), 50);
 
-    char* str_end = msg.debug_msg;
     for (int i = 1; i < argc; i++) {
-	// --BUG-- there is a segfault here which needs fixed.
-	strncpy(str_end, argv[i], 50-(str_end-msg.debug_msg));
-	str_end += strlen(argv[i]);
-	*str_end++ = ' ';
+        vec_pushn(&msg.text, argv[i], strlen(argv[i]));
+        vec_push(&msg.text, " ");
     }
-    *(str_end-1) = '\0'; // get rid of final space
+    vec_push(&msg.text, "\0");
 
     debug_send_msg(msg);
 }
@@ -146,7 +144,7 @@ void* read_msg_thread(void* arg) {
     fcntl(g_server_sock, F_SETFL, O_NONBLOCK);
     
     while (g_run_program) {
-        int status = recv_message(g_server_sock, &msg, &msg_buf);
+        int status = message_recv(g_server_sock, &msg, &msg_buf);
 
 	if (status != -1) {
 	    print_message(msg);

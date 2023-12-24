@@ -16,10 +16,10 @@ int make_player(struct player_manager *p) {
 int player_idle_handler(struct player_manager *p, struct message msg) {
     switch (msg.type) {
     case MSG_REQUEST_AUTHENTICATE:
-	strcpy(p->username, msg.user_credentials.username);
+	strcpy(p->username, msg.user_credentials.username.data);
 	p->state = STATE_LOBBY; // FIXME: no authentication done here!
 	printf("%s: authenticated\n", p->username);
-	printf("%s: authenticated (msg data)\n", msg.user_credentials.username);
+	printf("%s: authenticated (msg data)\n", (char*)msg.user_credentials.username.data);
 
 	{
 	    char buf[50] = {0};
@@ -28,14 +28,14 @@ int player_idle_handler(struct player_manager *p, struct message msg) {
 	    if (ret < 0)
 		return -1; // name was too large for the buffer.
 	    
-	    send_conf_message(p->socket, MSG_RESPONSE_SUCCESS,
+	    message_send_conf(p->socket, MSG_RESPONSE_SUCCESS,
 			      buf);
 	}
 
         break;
 		 
     default: 
-	send_conf_message(p->socket, MSG_RESPONSE_FAIL,
+	message_send_conf(p->socket, MSG_RESPONSE_FAIL,
 			  "you must be authenticated first");
 	break;
     }
@@ -46,7 +46,7 @@ int player_idle_handler(struct player_manager *p, struct message msg) {
 int player_lobby_handler(struct player_manager *p, struct message msg) {
     switch (msg.type) {
     case MSG_REQUEST_LIST_SCENARIOS:
-	send_conf_message(p->socket, MSG_RESPONSE_SUCCESS,
+	message_send_conf(p->socket, MSG_RESPONSE_SUCCESS,
 			  "There is only one scenario (0)");
 	break;
     case MSG_REQUEST_CREATE_SCENARIO:
@@ -57,11 +57,11 @@ int player_lobby_handler(struct player_manager *p, struct message msg) {
 
         scenario_add_player(&g_scenario, p);
 	
-	send_conf_message(p->socket, MSG_RESPONSE_SUCCESS,
+	message_send_conf(p->socket, MSG_RESPONSE_SUCCESS,
 			  "entering scenario...");
 	break;
     default:
-	send_conf_message(p->socket, MSG_RESPONSE_INVALID_REQUEST,
+	message_send_conf(p->socket, MSG_RESPONSE_INVALID_REQUEST,
 			  "not supported in lobby.");
 	break;
     }
@@ -81,7 +81,7 @@ int player_scenario_handler(struct player_manager *p, struct message msg) {
 	scenario_rem_player(&g_scenario, p);
 
 	// TODO: remove player from global scenario.
-	send_conf_message(p->socket, MSG_RESPONSE_SUCCESS,
+	message_send_conf(p->socket, MSG_RESPONSE_SUCCESS,
 			  "returning to lobby...");
 
 	break;
@@ -89,13 +89,13 @@ int player_scenario_handler(struct player_manager *p, struct message msg) {
     case MSG_REQUEST_WORLD:
     case MSG_REQUEST_PROPOSE_UPDATE:
     case MSG_REQUEST_DEBUG:
-	send_conf_message(p->socket, MSG_RESPONSE_FAIL,
+	message_send_conf(p->socket, MSG_RESPONSE_FAIL,
 			  "not implemented");
 	break;
 	
 	
     default:
-	send_conf_message(p->socket, MSG_RESPONSE_INVALID_REQUEST,
+	message_send_conf(p->socket, MSG_RESPONSE_INVALID_REQUEST,
 			  "command not supported in scenario.");
 	break;
 

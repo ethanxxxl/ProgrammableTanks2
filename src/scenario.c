@@ -11,7 +11,7 @@ int make_scenario(struct scenario *scene) {
     
     status = make_vector(&scene->actors, sizeof(struct actor), 10);
     if (status != 0) {
-	return -1;
+        return -1;
     }
 
     scene->tick_rate = 0.75;
@@ -37,13 +37,13 @@ int scenario_rem_player(struct scenario *scene, struct player_manager *player) {
 
     // find the actor corresponding to player.
     for (actor_id = 0; actor_id < scene->actors.len; actor_id++) {
-	struct actor* a = vec_ref(&scene->actors, actor_id);
-	if (a->player != player)
-	    continue; // this isn't the player, keep looking.
+        struct actor* a = vec_ref(&scene->actors, actor_id);
+        if (a->player != player)
+            continue; // this isn't the player, keep looking.
 
-	// found the player!
-	vec_rem(&scene->actors, actor_id);
-	return 0;
+        // found the player!
+        vec_rem(&scene->actors, actor_id);
+        return 0;
     }
 
     // the player wasn't in this scene...
@@ -53,10 +53,10 @@ int scenario_rem_player(struct scenario *scene, struct player_manager *player) {
 /// returns a reference to the tank in the scenario. Actor and Tank IDs are
 /// simply their index in their respective arrays.
 struct tank* scenario_get_tank(struct scenario *scene,
-				      int actor_id,
-				      int tank_id) {
+                               int actor_id,
+                               int tank_id) {
     if (tank_id >= TANKS_IN_SCENARIO || actor_id >= scene->actors.len)
-	return NULL;
+        return NULL;
 
     struct actor* actor = vec_ref(&scene->actors, actor_id);
     return &actor->tanks[tank_id];
@@ -64,12 +64,12 @@ struct tank* scenario_get_tank(struct scenario *scene,
 
 void scenario_heal_tank(struct tank *tank) {
     if (tank->cmd != TANK_HEAL)
-	return;
+        return;
 
     tank->health += TANK_HEAL_RATE;
     
     if (tank->health > 100)
-	tank->health = 100;
+        tank->health = 100;
 
     return;
 }
@@ -77,24 +77,24 @@ void scenario_heal_tank(struct tank *tank) {
 /// Friendly fire is on. tanks can also shoot themselves.
 void scenario_fire_tank(struct scenario *scene, struct tank* tank) {
     if (tank->cmd != TANK_FIRE)
-	return;
+        return;
 
     struct tank* target = NULL;
     for (int p = 0; p < scene->actors.len; p++) {
-	for (int t = 0; t < TANKS_IN_SCENARIO; t++) {
-	    struct tank* other = scenario_get_tank(scene, p, t);
+        for (int t = 0; t < TANKS_IN_SCENARIO; t++) {
+            struct tank* other = scenario_get_tank(scene, p, t);
 
             if (other->x == tank->aim_at_x &&
-		other->y == tank->aim_at_y) {
-		target = other;
-		goto end_search; // I just want to break out of both
-				 // loops lol
-	    }
-	}
+                other->y == tank->aim_at_y) {
+                target = other;
+                goto end_search; // I just want to break out of both
+                // loops lol
+            }
+        }
     }
  end_search:
     if (target == NULL)
-	return;
+        return;
 
     target->health -= TANK_SHELL_DAMAGE;
     return;
@@ -102,20 +102,20 @@ void scenario_fire_tank(struct scenario *scene, struct tank* tank) {
 
 void scenario_move_tank(struct tank *tank) {
     if (tank->cmd != TANK_MOVE)
-	return;
+        return;
 
     int x = tank->x,
-	y = tank->y,
-	xx = tank->move_to_x,
-	yy = tank->move_to_y;
+        y = tank->y,
+        xx = tank->move_to_x,
+        yy = tank->move_to_y;
     
     float move_distance =
-	sqrtf((powf(xx - x, 2) + powf(yy - y, 2)));
+        sqrtf((powf(xx - x, 2) + powf(yy - y, 2)));
 
     if (move_distance <= TANK_MAX_SPEED) {
-	tank->x = xx;
-	tank->y = yy;
-	return;
+        tank->x = xx;
+        tank->y = yy;
+        return;
     }
 
     // otherwise, we can only move the max distance. move the tank
@@ -136,18 +136,18 @@ int scenario_tick(struct scenario *scene) {
      */
 
     for (int t = 0; t < TANKS_IN_SCENARIO; t++) {
-	for (int a = 0; a < scene->actors.len; a++) {
-	    scenario_heal_tank(scenario_get_tank(scene, a, t));
-	}
-	
-	for (int a = 0; a < scene->actors.len; a++) {
-	    scenario_fire_tank(scene,
-			       scenario_get_tank(scene, a, t));
-	}
-	
-	for (int a = 0; a < scene->actors.len; a++) {
-	    scenario_move_tank(scenario_get_tank(scene, a, t));
-	}
+        for (int a = 0; a < scene->actors.len; a++) {
+            scenario_heal_tank(scenario_get_tank(scene, a, t));
+        }
+
+        for (int a = 0; a < scene->actors.len; a++) {
+            scenario_fire_tank(scene,
+                               scenario_get_tank(scene, a, t));
+        }
+
+        for (int a = 0; a < scene->actors.len; a++) {
+            scenario_move_tank(scenario_get_tank(scene, a, t));
+        }
     }
     
     return 0;
@@ -158,7 +158,7 @@ int scenario_handler(struct scenario *scene) {
     float next_tick_time = (1/scene->tick_rate) * scene->tick_number;
 
     if (current_time < next_tick_time)
-	return 1; // exit early since it is not time for the next update.
+        return 1; // exit early since it is not time for the next update.
 
     scenario_tick(scene);
     scene->tick_number++;
@@ -167,13 +167,13 @@ int scenario_handler(struct scenario *scene) {
     snprintf(msg_text, 30, "game is on tick %d", scene->tick_number);
 
     printf(": %s\n", msg_text);
-	
+
     // send updates to all the players
     for (int a = 0; a < scene->actors.len; a++) {
-	struct actor actor;
-	vec_at(&scene->actors, a, &actor);
+        struct actor actor;
+        vec_at(&scene->actors, a, &actor);
 
-	send_conf_message(actor.player->socket, MSG_RESPONSE_SUCCESS, msg_text);
+        message_send_conf(actor.player->socket, MSG_RESPONSE_SUCCESS, msg_text);
     }
     
     return 0;

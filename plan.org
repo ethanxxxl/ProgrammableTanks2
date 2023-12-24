@@ -178,3 +178,109 @@ response indicates whether the proposed update was accepted.
 
 The server should enumerate which game object updates were valid and which ones
 were invalid.
+
+** Message Structure
+I need to be able to receive and send messages. I have a bunch of message types.
+
+What you have going on currently?
+you have three functions:
+- send_message
+- recv_message
+- message_length
+
+#+begin_src c
+/// place to remember to update
+enum message_type {
+    ...
+};
+
+struct message {
+    enum message_type type;
+    union msg_data { ... };
+};
+
+/// place to remember to update
+int message_len(struct message* msg) {
+    switch (msg->type) {
+
+    }
+}
+
+/// place to remember to update
+void send_message(enum message_type* msg) {
+    switch (msg->type) {
+        ...
+    }
+}
+
+/// place to remember to update
+void rcv_message(struct message* msg) {
+    switch (msg->type) {
+        ...
+    }
+}
+
+/// place to remember to update
+void free_message(struct message* msg) {
+    switch (msg->type) {
+        ...
+    }
+}
+#+end_src
+
+With this setup, there are 5 places I have to remember to update every time I
+want to add a message. This is too much, and I have already been bitten in the
+butt because of it. There needs to be a more consolidated way to add new
+messages.
+
+This style is also confusing because it is not certain which union fields go
+with which message types, especially since not all message types are even
+associated with a union field.
+
+#+begin_src c
+// place to update for a new message
+enum message_type {
+    ...
+};
+
+struct message {
+    enum message_type type;
+
+    void* body; // this would be cast to the correct data structure and would
+                // have to be dynamically allocated, if an allocation is
+                // necessary.
+};
+
+// place to update for a new message
+struct {
+    void (*encode_message)(void);
+    void (*decode_message)(void);
+    void (*free_message)(void);
+} g_messages[] = {
+    [MSG1] = { ...; ...; ...; },
+    [MSG2] = { ...; ...; ...; }
+};
+#+end_src
+
+With the setup above, there are only two places where a message. without
+considering the functions that need to be written for the new message. This
+would be superior to the other system since it is more consolidated, and there
+is less room for error.
+
+One downside to this is that you have a void pointer in the message structure,
+which makes it a bit less ergonomic.
+
+Here is the thing, some messages will have data that will not be known at
+compile time. You will need to have dynamicallly allocated memory for these
+messages. Essentially anything that transmits a string falls into this category.
+
+you don't want to have body be cast to things such as vectors, since that would
+essentially mean doing two mallocs just for a single piece of data.
+
+when you receive data, it will be put into an expanding buffer. that data is
+then decoded into a message. for now, lets just keep doing it how you were, and
+malloc more than probably necessary. If if becomes a problem in the future, then
+we can fix it then.
+
+The encode message function should return a vector that contains the encoded
+body of the message

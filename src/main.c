@@ -127,7 +127,7 @@ void *accept_connections_thread(void* arg) {
 /// the client)
 void handle_client(struct player_manager* p, struct vector *msg_buf) {
     struct message msg;
-    int status = recv_message(p->socket, &msg, msg_buf);
+    int status = message_recv(p->socket, &msg, msg_buf);
     
     // return if nothing was read.
     if (status == -1) {
@@ -154,9 +154,9 @@ void handle_client(struct player_manager* p, struct vector *msg_buf) {
     }
     
     if (msg.type == MSG_REQUEST_DEBUG) {
-	printf("%s: %s\n", p->username, msg.debug_msg);
+	printf("%s: %s\n", p->username, (char*)msg.text.data);
 	
-        if (strcmp(msg.debug_msg, "kill-serv") == 0) {
+        if (strcmp((char*)msg.text.data, "kill-serv") == 0) {
             g_run = false;
         }
     }
