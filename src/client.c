@@ -14,17 +14,34 @@
 
 /* GLOBAL VARIABLES
  */
+
+pthread_t g_gfx_pid;
+pthread_t g_read_msg_pid;
+
 bool g_run_program;
+bool g_server_connected;
 int g_server_sock;
 
+bool g_gfx_running;
+
+/*
+** forward declarations
+*/
+void* read_msg_thread(void* arg);
+void* gfx_thread(void* arg);
+
+/*
+ * Command Callback Functions
+ */
 int debug_send_msg(struct message msg) {
+    if (!g_server_connected) {
+        printf("ERROR! you must connect to the server first!\n");
+        return -1;
+    }
     printf("--SENDING--\n");
     print_message(msg);
     return message_send(g_server_sock, msg);    
 }
-/*
- * Command Callback Functions
- */
 
 void propose_update(int argc, char **argv) {
     printf("proposing update...\n");
@@ -93,11 +110,69 @@ void dummy(int arggc, char **argv) {}
 int g_bg_color;
 void change_bg_color(int argc, char **argv) {
     if (argc != 2) {
-        printf("ERROR: there may only be a single argument to this function");
+        printf("ERROR: there may only be a single argument to this function\n");
         return;
     }
 
     g_bg_color = atoi(argv[1]);
+}
+
+void connect_serv(int argc, char **argv) {
+    if (argc > 2) {
+        printf("ERROR: there shouldn't be more than one parameter!\n");
+        return;
+    }
+
+    char default_addr[] = "127.0.0.1:4444";
+    char* address_port = default_addr;
+
+    if (argc == 2) {
+        address_port = argv[1];
+    }
+
+    char* address = strtok(address_port, ":");
+    char* port_str = strtok(NULL, ":");
+    int port = atoi(port_str);
+
+        // create a socket
+    g_server_sock = socket(PF_INET, SOCK_STREAM, 0);
+    if (socket < 0) {
+        printf("ERROR: failed to open network socket\n");
+        return;
+    }
+
+    // give the socket a name
+    struct sockaddr_in name =
+        { .sin_family = AF_INET,
+          .sin_addr = {inet_addr(address)},
+          .sin_port = port};
+
+    int status = connect(g_server_sock,
+             (struct sockaddr*) &name,
+             sizeof(name));
+    if (status < 0) {
+        printf("ERROR: couldn't connect to server.\n");
+        return;
+    }
+
+    // start the message reader thread
+    pthread_create(&g_read_msg_pid,
+           NULL,
+           &read_msg_thread,
+           NULL);
+
+    g_server_connected = true;
+    printf("connected to server on %s:%d\n", address, port);
+    return;
+}
+
+void start_gfx(int argc, char** argv) {
+    pthread_create(&g_gfx_pid,
+                   NULL,
+                   &gfx_thread,
+                   NULL);
+
+    g_gfx_running = true;
 }
 
 /*
@@ -111,6 +186,11 @@ const struct command {
     void (*callback)(int, char**);
     char* docs;
 } COMMANDS[] = {
+    {"connect", &connect_serv,
+     "connect to a server. For debugging purposes, an argument specifying the address \
+and port is optional."},
+    {"start-gfx", &start_gfx,
+     "starts the SDL2 GUI."},
     {"update", &propose_update,
      "NOT IMPLEMENTED"},
     {"add-tank", &add_tank,
@@ -126,7 +206,7 @@ const struct command {
     {"help", &help_page,
      "displays this help page."},
     {"msg", &message_server,
-     "sends the server a DEBUG_MESSAGE. sending a DEBUG_MESSAGE with the text\
+     "sends the server a DEBUG_MESSAGE. sending a DEBUG_MESSAGE with the text \
 'kill-serv' will cause the server to quit."},
 
     {"color", &change_bg_color,
@@ -170,12 +250,15 @@ void manage_commands(int argc, char** argv) {
     struct command const* cmd = COMMANDS;
     const size_t N_ELEM = sizeof(COMMANDS)/sizeof(struct command);
 
+    if (argc <= 0)
+        return;
+
     while (strcmp((cmd)->name, argv[0]) != 0
-       && (cmd - COMMANDS) < N_ELEM) cmd++;
+           && (cmd - COMMANDS) < N_ELEM) cmd++;
     
     if (cmd - COMMANDS >= N_ELEM) {
-    command_error(argc, argv);
-    return;
+        command_error(argc, argv);
+        return;
     }
 
     cmd->callback(argc, argv);
@@ -186,14 +269,17 @@ void* read_msg_thread(void* arg) {
     struct vector msg_buf;
     make_vector(&msg_buf, sizeof(char), 30);
     fcntl(g_server_sock, F_SETFL, O_NONBLOCK);
-    
+
     while (g_run_program) {
+        if (!g_server_connected)
+            continue;
+
         int status = message_recv(g_server_sock, &msg, &msg_buf);
 
-    if (status != -1) {
-        print_message(msg);
-        free_message(msg);
-    }
+        if (status != -1) {
+            print_message(msg);
+            free_message(msg);
+        }
     }
 
     return NULL;
@@ -243,61 +329,40 @@ void* gfx_thread(void* arg) {
 }
 
 int main(int argc, char** argv) {
-    // create a socket
-    g_server_sock = socket(PF_INET, SOCK_STREAM, 0);
-    if (socket < 0) {
-        perror("ERROR: failed to open network socket\n");
-        exit(EXIT_FAILURE);
-    }
+    g_gfx_pid = 0;
+    g_read_msg_pid = 0;
 
-    // give the socket a name
-    struct sockaddr_in name =
-        { .sin_family = AF_INET,
-          .sin_addr = {inet_addr("127.0.0.1")},
-          .sin_port = 4444};
-
-    int status = connect(g_server_sock,
-             (struct sockaddr*) &name,
-             sizeof(name));
-    if (status < 0) {
-        perror("ERROR: couldn't connect to server.\n");
-        exit(EXIT_FAILURE);
-    }
-    
     g_run_program = true;
+    g_server_connected = false;
+    g_gfx_running = false;
+
     char* buff = malloc(50);
     size_t buff_size = 50;
-
-    pthread_t read_msg_pid;
-    pthread_create(&read_msg_pid,
-           NULL,
-           &read_msg_thread,
-           NULL);
-
-    pthread_t gfx_pid;
-    pthread_create(&gfx_pid,
-                   NULL,
-                   &gfx_thread,
-                   NULL);
-    
     
     while (g_run_program) {
-        printf("\n> ");
+        printf("> ");
         fflush(stdout);
 
         getline(&buff, &buff_size, stdin);
 
         char* argv[10];
-    int i = 0;
-    for (char* token = strtok(buff, " \n");
-         token != NULL;
-         token = strtok(NULL, " \n")) {
-        argv[i++] = token;
-    }
+        int i = 0;
+        for (char* token = strtok(buff, " \n");
+             token != NULL;
+             token = strtok(NULL, " \n")) {
+            argv[i++] = token;
+        }
 
-    manage_commands(i, argv);
+        manage_commands(i, argv);
     }
 
     printf("quitting program...\n");
+
+    if (g_gfx_pid != 0)
+        pthread_join(g_gfx_pid, NULL);
+
+    if (g_read_msg_pid != 0)
+        pthread_join(g_read_msg_pid, NULL);
+
     exit(EXIT_SUCCESS);
 }
