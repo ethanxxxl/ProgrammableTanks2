@@ -166,7 +166,7 @@ int scenario_handler(struct scenario *scene) {
     char msg_text[30];
     snprintf(msg_text, 30, "game is on tick %d", scene->tick_number);
 
-    printf(": %s\n", msg_text);
+    //printf(": %s\n", msg_text);
 
     // send updates to all the players
     for (int a = 0; a < scene->actors.len; a++) {

@@ -110,6 +110,7 @@ int message_recv(int fd, struct message *msg, struct vector *buf);
 
 void print_message(struct message msg);
 
+int make_message(struct message* msg, enum message_type type);
 int free_message(struct message msg);
 
 #endif

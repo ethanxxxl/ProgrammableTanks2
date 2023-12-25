@@ -8,6 +8,16 @@
 #include <sys/socket.h>
 #include <vector.h>
 
+void print_hex(void *data, size_t len) {
+    for (char *c = (char *)data, i = 1; c < (char *)data + len; c++, i++) {
+        if (i % 16 == 0)
+            printf("\n");
+
+        printf("%02x ", *c);
+    }
+    printf("\n");
+}
+
 const struct message_fns G_TEXT_FNS = {
     &text_ser,
     &text_des,
@@ -60,18 +70,21 @@ int message_send(int fd, const struct message msg) {
     struct {
         enum message_type t;
         int body_len;
-    } header = {msg.type};
+    } header = {0};
+
+    header.t = msg.type;
+    header.body_len = 0;
 
     struct vector body = {0};
     if (g_message_funcs[msg.type] != NULL) {
         make_vector(&body, sizeof(char), 10);
 
         g_message_funcs[msg.type]->message_ser(&msg, &body);
+        header.body_len = body.len;
     }
 
-    header.body_len = body.len;
     send(fd, &header, sizeof(header), 0);
-    send(fd, &body.data, body.len, 0);
+    send(fd, body.data, body.len, 0);
 
     return 0;
 }
@@ -117,6 +130,7 @@ int message_recv(int fd, struct message* msg, struct vector* buf) {
         g_message_funcs[msg->type]->message_des(msg, buf);
     }
 
+    vec_resize(buf, 0);
     return 0;
 }
 
@@ -150,7 +164,7 @@ void text_ser(const struct message* msg, struct vector* dat) {
 }
 
 void text_des(struct message* msg, const struct vector* dat) {
-    vec_pushn(&msg->text, dat->data, msg->text.len);
+    vec_pushn(&msg->text, dat->data, dat->len);
     vec_push(&msg->text, "\0"); // ensure null termination
 }
 void text_init(struct message* msg) {
@@ -172,6 +186,7 @@ void user_credentials_ser(const struct message* msg, struct vector* dat) {
               msg->user_credentials.username.len);
 }
 void user_credentials_des(struct message* msg, const struct vector* dat) {
+    print_hex(dat->data, dat->len);
     vec_pushn(&msg->user_credentials.username, dat->data, dat->len);
     vec_push(&msg->user_credentials.username, "\0");
 }
@@ -180,16 +195,6 @@ void user_credentials_init(struct message* msg) {
 }
 void user_credentials_free(struct message* msg) {
     free_vector(&msg->user_credentials.username);
-}
-
-void print_hex(void *data, size_t len) {
-    for (char *c = (char *)data, i = 1; c < (char *)data + len; c++, i++) {
-        if (i % 16 == 0)
-            printf("\n");
-
-        printf("%02x ", *c);
-    }
-    printf("\n");
 }
 
 static const char *message_type_labels[] = {
@@ -228,6 +233,16 @@ void print_message(struct message msg) {
     default:
         break;
     }
+}
+
+int make_message(struct message* msg, enum message_type type) {
+    msg->type = type;
+    if (g_message_funcs[type] == NULL) {
+        return 0;
+    }
+
+    g_message_funcs[type]->message_init(msg);
+    return 0;
 }
 
 int free_message(struct message msg) {

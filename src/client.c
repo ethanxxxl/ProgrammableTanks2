@@ -42,8 +42,8 @@ void request_server_update(int argc, char **argv) {
 }
 
 void authenticate(int argc, char **argv) {
-    struct message msg = {MSG_REQUEST_AUTHENTICATE};
-    
+    struct message msg;
+    make_message(&msg, MSG_REQUEST_AUTHENTICATE);
     vec_pushn(&msg.user_credentials.username, argv[1], strlen(argv[1]));
     debug_send_msg(msg);
 }
