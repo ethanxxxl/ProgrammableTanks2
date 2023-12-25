@@ -1,3 +1,4 @@
+#include <SDL2/SDL.h>
 #include "vector.h"
 #include <fcntl.h>
 #include <pthread.h>
@@ -10,13 +11,6 @@
 #include <stdio.h>
 #include <string.h>
 #include <message.h>
-
-const char HELP_STRING[] =
-    "available commands:\n"
-    "    help    :: display this help page\n"
-    "    q       :: quit this program\n"
-    "    update  :: proposes an update to the server\n"
-    "    request :: requests a map update from the server\n";
 
 /* GLOBAL VARIABLES
  */
@@ -49,18 +43,18 @@ void authenticate(int argc, char **argv) {
 }
 void change_state(int argc, char **argv) {
     if (argc != 2) {
-	printf("ERROR: valid options are \"scene\" or \"lobby\"\n");
-	return;
+    printf("ERROR: valid options are \"scene\" or \"lobby\"\n");
+    return;
     }
 
     struct message msg;
     if (strcmp(argv[1], "scene") == 0) {
         msg = (struct message){MSG_REQUEST_JOIN_SCENARIO};
     } else if (strcmp(argv[1], "lobby") == 0) {
-	msg = (struct message){MSG_REQUEST_RETURN_TO_LOBBY};
+    msg = (struct message){MSG_REQUEST_RETURN_TO_LOBBY};
     } else {
         printf("ERROR: valid options are \"scene\" or \"lobby\"\n");
-	return;
+    return;
     }
 
     debug_send_msg(msg);
@@ -73,8 +67,7 @@ void list_scenarios(int argc, char **argv) {
 
 void add_tank(int argc, char **argv) {}
 
-void help_page(int argc, char **arg) { printf("%s", HELP_STRING); }
-
+void help_page(int argc, char** argv);
 
 void message_server(int argc, char **argv) {
     struct message msg = {MSG_REQUEST_DEBUG};
@@ -97,6 +90,16 @@ void quit(int argc, char **argv) {
 
 void dummy(int arggc, char **argv) {}
 
+int g_bg_color;
+void change_bg_color(int argc, char **argv) {
+    if (argc != 2) {
+        printf("ERROR: there may only be a single argument to this function");
+        return;
+    }
+
+    g_bg_color = atoi(argv[1]);
+}
+
 /*
  * Command Master List
  */
@@ -106,20 +109,61 @@ void dummy(int arggc, char **argv) {}
 const struct command {
     char name[20];
     void (*callback)(int, char**);
+    char* docs;
 } COMMANDS[] = {
-    {"update", &propose_update},
-    {"add-tank", &add_tank},
-    {"request", &request_server_update},
-    {"auth", &authenticate},
-    {"change-state", &change_state},
-    {"list-scenarios", &list_scenarios},
-    {"help", &help_page},
-    {"msg", &message_server},
+    {"update", &propose_update,
+     "NOT IMPLEMENTED"},
+    {"add-tank", &add_tank,
+     "NOT IMPLEMENTED"},
+    {"request", &request_server_update,
+     "NOT IMPLEMENTED"},
+    {"auth", &authenticate,
+     "takes a single argument, which is your username. registers you with the server."},
+    {"change-state", &change_state,
+     "valid options are 'lobby' or 'scene'."},
+    {"list-scenarios", &list_scenarios,
+     "asks the server for available scenarios to join (currently only one)."},
+    {"help", &help_page,
+     "displays this help page."},
+    {"msg", &message_server,
+     "sends the server a DEBUG_MESSAGE. sending a DEBUG_MESSAGE with the text\
+'kill-serv' will cause the server to quit."},
+
+    {"color", &change_bg_color,
+     "changes the bg color of the SDL graphics window."},
+
     {"\n", &dummy},
-    {"q", &quit},
-    {"quit", &quit},
-    {"exit", &quit},
+    {"q", &quit, "quit this client"},
+    {"quit", &quit, "quit this client"},
+    {"exit", &quit, "quit this client"},
 };
+
+void help_page(int argc, char **arg) {
+    int max_len = 0;
+    const int num_cmds = sizeof(COMMANDS) / sizeof(struct command);
+
+    for (int i = 0; i < num_cmds; i++) {
+        if (strlen(COMMANDS[i].name) > max_len)
+            max_len = strlen(COMMANDS[i].name);
+    }
+
+    printf("Here are all possible commands that you could enter:\n");
+    for (int i = 0; i < sizeof(COMMANDS) / sizeof(struct command); i++) {
+        if (COMMANDS[i].name[0] == '\n')
+            continue;
+
+        // add appropriate amount of spacing to right align docs
+        for (int n = 0; n < max_len - strlen(COMMANDS[i].name); n++)
+            printf(" ");
+
+        printf(" \033[1m%s\033[0m", COMMANDS[i].name);
+
+        if (COMMANDS[i].docs != NULL)
+            printf(" :: %s", COMMANDS[i].docs);
+
+        printf("\n");
+    }
+}
 
 // call the appropriate callback function for the command passed in.
 void manage_commands(int argc, char** argv) {
@@ -127,11 +171,11 @@ void manage_commands(int argc, char** argv) {
     const size_t N_ELEM = sizeof(COMMANDS)/sizeof(struct command);
 
     while (strcmp((cmd)->name, argv[0]) != 0
-	   && (cmd - COMMANDS) < N_ELEM) cmd++;
+       && (cmd - COMMANDS) < N_ELEM) cmd++;
     
     if (cmd - COMMANDS >= N_ELEM) {
-	command_error(argc, argv);
-	return;
+    command_error(argc, argv);
+    return;
     }
 
     cmd->callback(argc, argv);
@@ -146,16 +190,59 @@ void* read_msg_thread(void* arg) {
     while (g_run_program) {
         int status = message_recv(g_server_sock, &msg, &msg_buf);
 
-	if (status != -1) {
-	    print_message(msg);
-	    free_message(msg);
-	}
+    if (status != -1) {
+        print_message(msg);
+        free_message(msg);
+    }
     }
 
     return NULL;
 }
 
-int main(int argc, char** argv) {    
+const int SCREEN_WIDTH = 640;
+const int SCREEN_HEIGHT = 480;
+void* gfx_thread(void* arg) {
+    SDL_Window* window = NULL;
+    SDL_Surface* screenSurface = NULL;
+    g_bg_color = 0xff;
+
+    if (SDL_Init(SDL_INIT_VIDEO) < 0) {
+        printf("SDL could not initialize! SDL_Error: %s\n", SDL_GetError());
+    } else {
+        window = SDL_CreateWindow("SDL Tutorial",
+                                  SDL_WINDOWPOS_UNDEFINED,
+                                  SDL_WINDOWPOS_UNDEFINED,
+                                  SCREEN_WIDTH,
+                                  SCREEN_HEIGHT,
+                                  SDL_WINDOW_SHOWN);
+        if (window == NULL) {
+            printf("SDL could not create a window! SDL_Error: %s\n",
+                   SDL_GetError());
+        } else {
+            screenSurface = SDL_GetWindowSurface(window);
+            SDL_FillRect(screenSurface, NULL, SDL_MapRGB(screenSurface->format,
+                                                         g_bg_color, g_bg_color, g_bg_color));
+            SDL_UpdateWindowSurface(window);
+            SDL_Event e;
+
+            while (g_run_program) {
+                SDL_FillRect(screenSurface, NULL, SDL_MapRGB(screenSurface->format,
+                                                             g_bg_color, g_bg_color, g_bg_color));
+                SDL_UpdateWindowSurface(window);
+                while( SDL_PollEvent( &e ) ) {
+                    if ( e.type == SDL_QUIT )
+                        g_run_program = false;
+                }
+            }
+
+            SDL_DestroyWindow(window);
+            SDL_Quit();
+        }}
+
+    return NULL;
+}
+
+int main(int argc, char** argv) {
     // create a socket
     g_server_sock = socket(PF_INET, SOCK_STREAM, 0);
     if (socket < 0) {
@@ -170,8 +257,8 @@ int main(int argc, char** argv) {
           .sin_port = 4444};
 
     int status = connect(g_server_sock,
-			 (struct sockaddr*) &name,
-			 sizeof(name));
+             (struct sockaddr*) &name,
+             sizeof(name));
     if (status < 0) {
         perror("ERROR: couldn't connect to server.\n");
         exit(EXIT_FAILURE);
@@ -183,9 +270,15 @@ int main(int argc, char** argv) {
 
     pthread_t read_msg_pid;
     pthread_create(&read_msg_pid,
-		   NULL,
-		   &read_msg_thread,
-		   NULL);
+           NULL,
+           &read_msg_thread,
+           NULL);
+
+    pthread_t gfx_pid;
+    pthread_create(&gfx_pid,
+                   NULL,
+                   &gfx_thread,
+                   NULL);
     
     
     while (g_run_program) {
@@ -195,14 +288,14 @@ int main(int argc, char** argv) {
         getline(&buff, &buff_size, stdin);
 
         char* argv[10];
-	int i = 0;
-	for (char* token = strtok(buff, " \n");
-	     token != NULL;
-	     token = strtok(NULL, " \n")) {
-	    argv[i++] = token;
-	}
+    int i = 0;
+    for (char* token = strtok(buff, " \n");
+         token != NULL;
+         token = strtok(NULL, " \n")) {
+        argv[i++] = token;
+    }
 
-	manage_commands(i, argv);
+    manage_commands(i, argv);
     }
 
     printf("quitting program...\n");
