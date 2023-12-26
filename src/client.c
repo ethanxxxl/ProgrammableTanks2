@@ -326,32 +326,36 @@ void gfx_render_grid(SDL_Renderer* renderer, SDL_Rect* cam, SDL_Rect* canvas,
     gfx_render_rect(renderer, cam, canvas);
 
     // now draw the grid
-    int size_x = canvas->w / cols;
-    int size_y = canvas->h / rows;
+    float size_x = (float)canvas->w / cols;
+    float size_y =(float)canvas->h / rows;
 
-    int spacing_x = size_x / 10;
-    int spacing_y = size_y / 10;
+    float spacing_x = size_x / 10;
+    float spacing_y = size_y / 10;
 
     if (spacing_x <= 0) spacing_x = 1;
     if (spacing_y <= 0) spacing_y = 1;
 
-    // TODO: center the grid along the shorter axis
-    struct SDL_Rect tile = {
-        .x = spacing_x / 2,
-        .y = spacing_y / 2,
-        .w = size_x - spacing_x,
-        .h = size_y - spacing_y,
-    };
+    float fx = spacing_x / 2;
+    float fy = spacing_y / 2;
 
+    struct SDL_Rect tile = {
+        .x = round(fx),
+        .y = round(fy),
+        .w = round(size_x - spacing_x),
+        .h = round(size_y - spacing_y),
+    };
     SDL_SetRenderDrawColor(renderer, fg[0], fg[1], fg[2], SDL_ALPHA_OPAQUE);
     for (int x = 0; x < cols; x++) {
         for (int y = 0; y < rows; y++) {
+            tile.x = round(fx);
+            tile.y = round(fy);
+
             gfx_render_rect(renderer, cam, &tile);
 
-            tile.y += size_y;
+            fy += size_y;
         }
-        tile.y = spacing_y / 2;
-        tile.x += size_x;
+        fy = spacing_y / 2;
+        fx += size_x;
     }
 }
 
