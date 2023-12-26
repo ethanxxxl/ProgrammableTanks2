@@ -1,9 +1,15 @@
 #include <SDL2/SDL.h>
 #include "vector.h"
+#include <SDL2/SDL_events.h>
+#include <SDL2/SDL_mouse.h>
+#include <SDL2/SDL_pixels.h>
+#include <SDL2/SDL_render.h>
+#include <SDL2/SDL_surface.h>
 #include <fcntl.h>
 #include <pthread.h>
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
@@ -188,7 +194,7 @@ const struct command {
 } COMMANDS[] = {
     {"connect", &connect_serv,
      "connect to a server. For debugging purposes, an argument specifying the address \
-and port is optional."},
+and port is optional. (default is 127.0.0.1:4444)"},
     {"start-gfx", &start_gfx,
      "starts the SDL2 GUI."},
     {"update", &propose_update,
@@ -287,44 +293,164 @@ void* read_msg_thread(void* arg) {
 
 const int SCREEN_WIDTH = 640;
 const int SCREEN_HEIGHT = 480;
+
+int g_map_height;
+int g_map_width;
+/// Draws the grid with dimensions on the surface, but only the portion that cam
+/// is viewing.
+void gfx_render_rect(SDL_Renderer* renderer, SDL_Rect* cam, SDL_Rect* rect) {
+    int l_edge = rect->x - cam->x;
+    int t_edge = rect->y - cam->y;
+    int r_edge = (rect->x + rect->w) - cam->x;
+    int b_edge = (rect->y + rect->h) - cam->y;
+
+    if (l_edge < 0) l_edge = 0;            // | bounds checking
+    if (t_edge < 0) t_edge = 0;            // |
+    if (r_edge > cam->w) r_edge = cam->w;  // |
+    if (b_edge > cam->h) b_edge = cam->h;  // |
+
+    SDL_Rect the_thing = {
+        .x = l_edge,
+        .y = t_edge,
+        .w = r_edge - l_edge,
+        .h = b_edge - t_edge
+    };
+
+    SDL_RenderFillRect(renderer, &the_thing);
+}
+
+void gfx_render_grid(SDL_Renderer* renderer, SDL_Rect* cam, SDL_Rect* canvas,
+                     int rows, int cols, uint8_t fg[3], uint8_t bg[3]) {
+    // clear the ground first
+    SDL_SetRenderDrawColor(renderer, bg[0], bg[1], bg[2], SDL_ALPHA_OPAQUE);
+    gfx_render_rect(renderer, cam, canvas);
+
+    // now draw the grid
+    int size_x = canvas->w / cols;
+    int size_y = canvas->h / rows;
+
+    int spacing_x = size_x / 10;
+    int spacing_y = size_y / 10;
+
+    if (spacing_x <= 0) spacing_x = 1;
+    if (spacing_y <= 0) spacing_y = 1;
+
+    // TODO: center the grid along the shorter axis
+    struct SDL_Rect tile = {
+        .x = spacing_x / 2,
+        .y = spacing_y / 2,
+        .w = size_x - spacing_x,
+        .h = size_y - spacing_y,
+    };
+
+    SDL_SetRenderDrawColor(renderer, fg[0], fg[1], fg[2], SDL_ALPHA_OPAQUE);
+    for (int x = 0; x < cols; x++) {
+        for (int y = 0; y < rows; y++) {
+            gfx_render_rect(renderer, cam, &tile);
+
+            tile.y += size_y;
+        }
+        tile.y = spacing_y / 2;
+        tile.x += size_x;
+    }
+}
+
 void* gfx_thread(void* arg) {
     SDL_Window* window = NULL;
-    SDL_Surface* screenSurface = NULL;
+    SDL_Renderer* renderer = NULL;
     g_bg_color = 0xff;
+    g_map_height = 50;
+    g_map_width = 50;
 
+    /*
+    ** INITIALIZE SDL
+     */
     if (SDL_Init(SDL_INIT_VIDEO) < 0) {
-        printf("SDL could not initialize! SDL_Error: %s\n", SDL_GetError());
-    } else {
-        window = SDL_CreateWindow("SDL Tutorial",
-                                  SDL_WINDOWPOS_UNDEFINED,
-                                  SDL_WINDOWPOS_UNDEFINED,
-                                  SCREEN_WIDTH,
-                                  SCREEN_HEIGHT,
-                                  SDL_WINDOW_SHOWN);
-        if (window == NULL) {
-            printf("SDL could not create a window! SDL_Error: %s\n",
-                   SDL_GetError());
-        } else {
-            screenSurface = SDL_GetWindowSurface(window);
-            SDL_FillRect(screenSurface, NULL, SDL_MapRGB(screenSurface->format,
-                                                         g_bg_color, g_bg_color, g_bg_color));
-            SDL_UpdateWindowSurface(window);
-            SDL_Event e;
+        printf("SDL could not initialize!\n");
+        printf("SDL_Error: %s\n", SDL_GetError());
+        return NULL;
+    };
 
-            while (g_run_program) {
-                SDL_FillRect(screenSurface, NULL, SDL_MapRGB(screenSurface->format,
-                                                             g_bg_color, g_bg_color, g_bg_color));
-                SDL_UpdateWindowSurface(window);
-                while( SDL_PollEvent( &e ) ) {
-                    if ( e.type == SDL_QUIT )
-                        g_run_program = false;
-                }
+    window = SDL_CreateWindow("SDL Tutorial",
+                              SDL_WINDOWPOS_UNDEFINED,
+                              SDL_WINDOWPOS_UNDEFINED,
+                              SCREEN_WIDTH,
+                              SCREEN_HEIGHT,
+                              SDL_WINDOW_SHOWN);
+
+    if (window == NULL) {
+        printf("SDL could not create a window!\n");
+        printf("SDL_Error: %s\n", SDL_GetError());
+        SDL_Quit();
+        return NULL;
+    }
+
+    renderer= SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
+    if (renderer == NULL) {
+        printf("SDL could not create a renderer!\n");
+        printf("SLD_Error: %s\n", SDL_GetError());
+        SDL_DestroyWindow(window);
+        SDL_Quit();
+        return NULL;
+    }
+
+    /*
+    ** LOAD MEDIA
+     */
+    uint8_t bg_colors[3] = {47, 196, 97};
+    uint8_t fg_colors[3] = {88, 119, 140};
+    /* SDL_Texture* grid = gfx_make_grid_texture(renderer, 1000, 1000, */
+    /*                                           g_map_height, g_map_width, */
+    /*                                           bg_colors, fg_colors); */
+    /* if (grid == NULL) { */
+    /*     printf("due to error, quiting GFX.\n"); */
+    /*     goto gfx_quit; */
+    /* } */
+
+    /*
+    ** RUN GFX LOOP
+     */
+    SDL_Rect camera = { .x = 0, .y = 0, .h = SCREEN_HEIGHT, .w = SCREEN_WIDTH};
+    SDL_Rect grid = {.x = 0, .y=0, .h = 1000, .w = 1000};
+
+    SDL_Event e;
+    g_gfx_running = true;
+    while (g_gfx_running) {
+        SDL_SetRenderDrawColor(renderer, g_bg_color, g_bg_color, g_bg_color,
+                               SDL_ALPHA_OPAQUE);
+
+        SDL_RenderClear(renderer);
+        gfx_render_grid(renderer, &camera, &grid,
+                        g_map_height, g_map_width, bg_colors, fg_colors);
+
+        SDL_RenderPresent(renderer);
+
+        while (SDL_PollEvent(&e)) {
+            switch (e.type) {
+            case SDL_MOUSEMOTION:
+                // see if the user is panning
+                if ((e.motion.state & SDL_BUTTON_LMASK) != SDL_BUTTON_LMASK)
+                    break;
+
+                camera.x -= e.motion.xrel;
+                camera.y -= e.motion.yrel;
+                break;
+            case SDL_MOUSEWHEEL:
+                grid.h += e.wheel.y*15;
+                grid.w += e.wheel.y*15;
+                break;
+            case SDL_QUIT:
+                g_gfx_running = false;
+                break;
+            default:
+                break;
             }
+        }
+    }
 
-            SDL_DestroyWindow(window);
-            SDL_Quit();
-        }}
-
+    SDL_DestroyRenderer(renderer);
+    SDL_DestroyWindow(window);
+    SDL_Quit();
     return NULL;
 }
 
