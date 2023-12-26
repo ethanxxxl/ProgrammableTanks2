@@ -30,6 +30,12 @@ int g_server_sock;
 
 bool g_gfx_running;
 
+struct tank {
+    int x, y;
+};
+
+struct vector g_tanks;
+
 /*
 ** forward declarations
 */
@@ -88,7 +94,22 @@ void list_scenarios(int argc, char **argv) {
     debug_send_msg(msg);
 }
 
-void add_tank(int argc, char **argv) {}
+void add_tank(int argc, char **argv) {
+    if (argc != 3) {
+        printf("ERROR: you must include an x and y position.\n");
+        return;
+    }
+
+    int x = atoi(argv[1]);
+    int y = atoi(argv[2]);
+
+    struct tank new_tank = {
+        .x = x,
+        .y = y,
+    };
+
+    vec_push(&g_tanks, &new_tank);
+}
 
 void help_page(int argc, char** argv);
 
@@ -427,6 +448,24 @@ void* gfx_thread(void* arg) {
         gfx_render_grid(renderer, &camera, &grid,
                         g_map_height, g_map_width, bg_colors, fg_colors);
 
+        for (int t = 0; t < g_tanks.len; t++) {
+            struct tank tank;
+            vec_at(&g_tanks, t, &tank);
+
+            float grid_tile_w = (float)grid.w / g_map_width;
+            float grid_tile_h = (float)grid.h / g_map_height;
+
+            SDL_Rect tank_tile = {
+                .x = round(grid_tile_w * (tank.x + (float)1/8)),
+                .y = round(grid_tile_h * (tank.y + (float)1/8)),
+                .w = grid_tile_w * 3 / 4,
+                .h = grid_tile_h * 3 / 4,
+            };
+
+            SDL_SetRenderDrawColor(renderer, 0, 0, 0, SDL_ALPHA_OPAQUE);
+            gfx_render_rect(renderer, &camera, &tank_tile);
+        }
+
         SDL_RenderPresent(renderer);
 
         while (SDL_PollEvent(&e)) {
@@ -465,6 +504,8 @@ int main(int argc, char** argv) {
     g_run_program = true;
     g_server_connected = false;
     g_gfx_running = false;
+
+    make_vector(&g_tanks, sizeof(struct tank), 30);
 
     char* buff = malloc(50);
     size_t buff_size = 50;
