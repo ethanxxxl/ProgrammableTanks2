@@ -32,7 +32,7 @@ int vec_reserve(struct vector *vec, int n) {
 	return 0;
 
     // reserve twice as much as requested, to reduce reallocs.
-    void *tmp = realloc(vec->data, n*2);
+    void *tmp = realloc(vec->data, vec->element_len * n*2);
     
     if (tmp == NULL) {
 	return -1;
