@@ -7,6 +7,7 @@
 
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <string.h>
 #include <sys/socket.h>
 
 #include <scenario.h>
@@ -27,7 +28,7 @@ int g_connections_len;
 // TODO: should eventually support multiple scenarios
 struct scenario g_scenario;
 
-void *accept_connections_thread(void* arg) {
+void *accept_connections_thread(void* port_num) {
     // create a socket
     int sock = socket(PF_INET, SOCK_STREAM, 0);
     if (sock < 0) {
@@ -39,7 +40,7 @@ void *accept_connections_thread(void* arg) {
     struct sockaddr_in name =
         { .sin_family = AF_INET,
           .sin_addr = {inet_addr("127.0.0.1")},
-          .sin_port = 4444};
+          .sin_port = *(int*)port_num};
 
     int status = bind(sock, (struct sockaddr*) &name, sizeof(name));
     if (status < 0) {
@@ -149,6 +150,10 @@ void* client_request_thread(void *arg) {
 }
 
 int main(int argc, char** argv) {
+    int port_num = 4444;
+    if (argc == 2)
+	port_num = atoi(argv[1]);
+    
     make_scenario(&g_scenario);
     
     // start networking thread
@@ -158,7 +163,7 @@ int main(int argc, char** argv) {
     pthread_create(&network_thread_pid,
 		   NULL,
 		   &accept_connections_thread,
-		   NULL);
+		   &port_num);
     
     pthread_t client_thread_pid;
     pthread_create(&client_thread_pid,

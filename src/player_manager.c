@@ -86,13 +86,50 @@ int player_scenario_handler(struct player_manager *p, struct message msg) {
 
 	break;
 	
-    case MSG_REQUEST_WORLD:
-    case MSG_REQUEST_PROPOSE_UPDATE:
+    case MSG_REQUEST_PLAYER_UPDATE: {
+        // FIXME: probably should handle validation code in the scenario module,
+        // but this will have to do for now.
+
+	// ensure the client doesn't try to update more tanks than actually
+	// exist.
+	const struct player_update body = msg.player_update;
+	
+	int num_tanks = body.tank_instructions.len;
+	if (TANKS_IN_SCENARIO < num_tanks)
+	    num_tanks = TANKS_IN_SCENARIO;
+
+	for (int t = 0; t < num_tanks; t++) {
+	    struct actor *actor = scenario_find_actor(&g_scenario, p);
+
+            struct coordinate move_to;
+	    struct coordinate aim_at;
+	    enum tank_command command;
+	    
+	    vec_at(&body.tank_position_coords, t, &move_to);
+	    vec_at(&body.tank_target_coords, t, &aim_at);
+	    vec_at(&body.tank_instructions, t, &command);	    
+
+	    struct tank *tank = &actor->tanks[t];
+
+	    tank->move_to_x = move_to.x;
+	    tank->move_to_y = move_to.y;
+
+	    tank->aim_at_x = aim_at.x;
+	    tank->aim_at_y = aim_at.y;
+
+	    tank->cmd = command;
+	}
+	
+	
+	message_send_conf(p->socket, MSG_RESPONSE_FAIL,
+			  "updated successfully");
+    }
+	break;
     case MSG_REQUEST_DEBUG:
 	message_send_conf(p->socket, MSG_RESPONSE_FAIL,
 			  "not implemented");
 	break;
-	
+
 	
     default:
 	message_send_conf(p->socket, MSG_RESPONSE_INVALID_REQUEST,

@@ -18,6 +18,8 @@
 #include <string.h>
 #include <message.h>
 
+// TODO FIXME BUG program segfaults when you enter blank username.
+
 /* GLOBAL VARIABLES
  */
 
@@ -34,7 +36,44 @@ struct tank {
     int x, y;
 };
 
-struct vector g_tanks;
+struct player {
+    char username[50];
+    struct vector tanks;
+};
+
+struct vector g_players;
+
+void players_update_player(char *username, struct vector *tanks) {
+    // see if the player exists in the structure.
+    struct player *player = NULL;
+    for (int p = 0; p < g_players.len; p++) {
+	player = vec_ref(&g_players, p);
+	int status = strcmp(username, player->username);
+
+	if (status == 0)
+	    goto update_player;
+    }
+    // emulated for-else syntax from python
+    // this is the else case, we didn't find the player.
+    struct player new_player;
+    strncpy(new_player.username, username, 50);
+    make_vector(&new_player.tanks, sizeof(struct tank), 30);
+
+    vec_push(&g_players, &new_player);
+    player = vec_ref(&g_players, g_players.len - 1);
+
+ update_player:
+    int num_tanks = player->tanks.len;
+    if (tanks->len < num_tanks)
+	num_tanks = tanks->len;
+    
+    for (int t = 0; t < num_tanks; t++) {
+	struct tank *tank = vec_ref(&player->tanks, t);
+	vec_at(tanks, t, tank);
+    }
+    return;
+}
+
 
 /*
 ** forward declarations
@@ -94,21 +133,19 @@ void list_scenarios(int argc, char **argv) {
     debug_send_msg(msg);
 }
 
-void add_tank(int argc, char **argv) {
-    if (argc != 3) {
-        printf("ERROR: you must include an x and y position.\n");
-        return;
+void update_tank(int argc, char **argv) {
+    // TODO fill me in
+}
+
+void list_tanks(int argc, char **argv) {
+    for (int p = 0; p < g_players.len; p++) {
+	struct player *player = vec_ref(&g_players, p);
+	printf("[tanks for %s]\n", player->username);
+	for (int t = 0; t < player->tanks.len; t++) {
+	    struct tank *tank = vec_ref(&player->tanks, t);
+	    printf("  [%d] x: %d y: %d\n", t, tank->x, tank->y);
+	}
     }
-
-    int x = atoi(argv[1]);
-    int y = atoi(argv[2]);
-
-    struct tank new_tank = {
-        .x = x,
-        .y = y,
-    };
-
-    vec_push(&g_tanks, &new_tank);
 }
 
 void help_page(int argc, char** argv);
@@ -218,10 +255,11 @@ const struct command {
 and port is optional. (default is 127.0.0.1:4444)"},
     {"start-gfx", &start_gfx,
      "starts the SDL2 GUI."},
+    {"list-tanks", &list_tanks, "lists tanks for each player currently connected"},
     {"update", &propose_update,
      "NOT IMPLEMENTED"},
-    {"add-tank", &add_tank,
-     "NOT IMPLEMENTED"},
+    {"add-tank", &update_tank,
+     "give the tank index, followed by an x and y coordinate, and that tank will move to that location."},
     {"request", &request_server_update,
      "NOT IMPLEMENTED"},
     {"auth", &authenticate,
@@ -303,10 +341,29 @@ void* read_msg_thread(void* arg) {
 
         int status = message_recv(g_server_sock, &msg, &msg_buf);
 
-        if (status != -1) {
-            print_message(msg);
-            free_message(msg);
-        }
+        if (status < 0)
+	    continue;
+
+	switch (msg.type) {
+	case MSG_RESPONSE_SCENARIO_TICK: {
+	    struct scenario_tick body = msg.scenario_tick;
+	    printf("users: %d | ", body.username_vecs.len);
+	    for (int u = 0; u < body.username_vecs.len; u++) {
+		players_update_player(vec_ref(&body.username_vecs, u),
+				      vec_ref(&body.tank_positions, u));
+		printf("%s | ", (char*)body.username_vecs.data);
+	    }
+	    printf("\n");
+	    print_message(msg);
+
+
+	} break;	    
+	default:
+	    break;
+	}
+
+	
+	free_message(msg);
     }
 
     return NULL;
@@ -340,43 +397,32 @@ void gfx_render_rect(SDL_Renderer* renderer, SDL_Rect* cam, SDL_Rect* rect) {
     SDL_RenderFillRect(renderer, &the_thing);
 }
 
-void gfx_render_grid(SDL_Renderer* renderer, SDL_Rect* cam, SDL_Rect* canvas,
-                     int rows, int cols, uint8_t fg[3], uint8_t bg[3]) {
+void gfx_render_grid(SDL_Renderer* renderer, SDL_Rect* cam, const SDL_Rect* tile,
+		     int spacing, int rows, int cols, uint8_t fg[3], uint8_t bg[3]) {
+
+    SDL_Rect drawn_tile = *tile;
+    SDL_Rect canvas = {
+	.x = drawn_tile.x - 5,
+	.y = drawn_tile.y - 5,
+	.w = cols * (drawn_tile.w + spacing) + 10,
+	.h = rows * (drawn_tile.h + spacing) + 10
+    };
+
     // clear the ground first
     SDL_SetRenderDrawColor(renderer, bg[0], bg[1], bg[2], SDL_ALPHA_OPAQUE);
-    gfx_render_rect(renderer, cam, canvas);
+    gfx_render_rect(renderer, cam, &canvas);
 
     // now draw the grid
-    float size_x = (float)canvas->w / cols;
-    float size_y =(float)canvas->h / rows;
-
-    float spacing_x = size_x / 10;
-    float spacing_y = size_y / 10;
-
-    if (spacing_x <= 0) spacing_x = 1;
-    if (spacing_y <= 0) spacing_y = 1;
-
-    float fx = spacing_x / 2;
-    float fy = spacing_y / 2;
-
-    struct SDL_Rect tile = {
-        .x = round(fx),
-        .y = round(fy),
-        .w = round(size_x - spacing_x),
-        .h = round(size_y - spacing_y),
-    };
     SDL_SetRenderDrawColor(renderer, fg[0], fg[1], fg[2], SDL_ALPHA_OPAQUE);
     for (int x = 0; x < cols; x++) {
         for (int y = 0; y < rows; y++) {
-            tile.x = round(fx);
-            tile.y = round(fy);
+            gfx_render_rect(renderer, cam, &drawn_tile);
 
-            gfx_render_rect(renderer, cam, &tile);
-
-            fy += size_y;
+	    drawn_tile.y += drawn_tile.h + spacing;
         }
-        fy = spacing_y / 2;
-        fx += size_x;
+
+	drawn_tile.y = canvas.y + 5;
+	drawn_tile.x += drawn_tile.w + spacing;
     }
 }
 
@@ -424,19 +470,12 @@ void* gfx_thread(void* arg) {
      */
     uint8_t bg_colors[3] = {47, 196, 97};
     uint8_t fg_colors[3] = {88, 119, 140};
-    /* SDL_Texture* grid = gfx_make_grid_texture(renderer, 1000, 1000, */
-    /*                                           g_map_height, g_map_width, */
-    /*                                           bg_colors, fg_colors); */
-    /* if (grid == NULL) { */
-    /*     printf("due to error, quiting GFX.\n"); */
-    /*     goto gfx_quit; */
-    /* } */
 
     /*
     ** RUN GFX LOOP
      */
     SDL_Rect camera = { .x = 0, .y = 0, .h = SCREEN_HEIGHT, .w = SCREEN_WIDTH};
-    SDL_Rect grid = {.x = 0, .y=0, .h = 1000, .w = 1000};
+    SDL_Rect tile = {.x = 0, .y=0, .h = 5, .w = 5};
 
     SDL_Event e;
     g_gfx_running = true;
@@ -445,26 +484,30 @@ void* gfx_thread(void* arg) {
                                SDL_ALPHA_OPAQUE);
 
         SDL_RenderClear(renderer);
-        gfx_render_grid(renderer, &camera, &grid,
+	const int grid_spacing = 1;
+        gfx_render_grid(renderer, &camera, &tile, grid_spacing,
                         g_map_height, g_map_width, bg_colors, fg_colors);
 
-        for (int t = 0; t < g_tanks.len; t++) {
-            struct tank tank;
-            vec_at(&g_tanks, t, &tank);
+	for (int p = 0; p < g_players.len; p++) {
+	    struct player *player = vec_ref(&g_players, p);
+	    struct vector tanks = player->tanks;
+	    	    
+	    for (int t = 0; t < tanks.len; t++) {
+		struct tank tank;
+		vec_at(&tanks, t, &tank);
 
-            float grid_tile_w = (float)grid.w / g_map_width;
-            float grid_tile_h = (float)grid.h / g_map_height;
+		SDL_Rect tank_tile = {
+		    .x = tank.x * (tile.w + grid_spacing),
+		    .y = tank.y * (tile.h + grid_spacing),
+		    .w = tile.w,
+		    .h = tile.h
+		};
 
-            SDL_Rect tank_tile = {
-                .x = round(grid_tile_w * (tank.x + (float)1/8)),
-                .y = round(grid_tile_h * (tank.y + (float)1/8)),
-                .w = grid_tile_w * 3 / 4,
-                .h = grid_tile_h * 3 / 4,
-            };
-
-            SDL_SetRenderDrawColor(renderer, 0, 0, 0, SDL_ALPHA_OPAQUE);
-            gfx_render_rect(renderer, &camera, &tank_tile);
-        }
+		// TODO: Render different color for each player
+		SDL_SetRenderDrawColor(renderer, 0, 0, 0, SDL_ALPHA_OPAQUE);
+		gfx_render_rect(renderer, &camera, &tank_tile);
+	    }
+	}
 
         SDL_RenderPresent(renderer);
 
@@ -479,8 +522,8 @@ void* gfx_thread(void* arg) {
                 camera.y -= e.motion.yrel;
                 break;
             case SDL_MOUSEWHEEL:
-                grid.h += e.wheel.y*15;
-                grid.w += e.wheel.y*15;
+                tile.h += e.wheel.y;
+                tile.w += e.wheel.y;
                 break;
             case SDL_QUIT:
                 g_gfx_running = false;
@@ -505,8 +548,8 @@ int main(int argc, char** argv) {
     g_server_connected = false;
     g_gfx_running = false;
 
-    make_vector(&g_tanks, sizeof(struct tank), 30);
-
+    make_vector(&g_players, sizeof(struct player), 5);
+    
     char* buff = malloc(50);
     size_t buff_size = 50;
     

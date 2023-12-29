@@ -3,28 +3,11 @@
 
 #include <player_manager.h>
 #include <vector.h>
+#include <tank.h>
 
 // the global scenario
 extern struct scenario g_scenario;
 
-enum tank_command {
-    TANK_MOVE,
-    TANK_FIRE,
-    TANK_HEAL,
-};
-
-#define TANK_FIRE_DISTANCE 10
-#define TANK_HEAL_RATE 15
-#define TANK_MAX_SPEED 5
-#define TANK_SHELL_DAMAGE 75
-struct tank {
-    int x,y;
-    int health;
-    enum tank_command cmd;
-
-    int aim_at_x, aim_at_y;
-    int move_to_x, move_to_y;
-};
 
 enum SCENARIO_OBJECTIVES {
     DEFEND_POSITION,
@@ -62,6 +45,9 @@ int free_scenario(const struct scenario *scene);
 */
 int scenario_add_player(struct scenario *scene, struct player_manager *player);
 int scenario_rem_player(struct scenario *scene, struct player_manager *player);
+
+struct actor* scenario_find_actor(struct scenario *scene,
+				  struct player_manager *player);
 
 /// Runs updates on everything in the scenario:
 ///  tank health

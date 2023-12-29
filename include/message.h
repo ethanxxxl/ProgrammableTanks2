@@ -4,6 +4,10 @@
 #include <stdint.h>
 #include <vector.h>
 
+// BUG: TODO: add return value to the message callback functions. if
+// there is an error in the functions, then they should return -1, so
+// that further errors are prevented.
+
 /// All possible message types.
 ///
 /// Response messages are generally SUCCESS, FAIL, or INVALID.
@@ -18,13 +22,12 @@ enum message_type {
     MSG_REQUEST_JOIN_SCENARIO,
     
     // SCENARIO STATE REQUESTS
-    MSG_REQUEST_WORLD,
-    MSG_REQUEST_PROPOSE_UPDATE,
+    MSG_REQUEST_PLAYER_UPDATE,
     MSG_REQUEST_DEBUG,
     MSG_REQUEST_RETURN_TO_LOBBY,
 
     // RESPONSES
-    MSG_RESPONSE_WORLD_DATA,
+    MSG_RESPONSE_SCENARIO_TICK,
 
     MSG_RESPONSE_SUCCESS,
     MSG_RESPONSE_FAIL,
@@ -56,19 +59,6 @@ void text_des(struct message* msg, const struct vector* dat);
 void text_init(struct message*);
 void text_free(struct message*);
 
-/* PLAYER_UPDATE
- *
- * whenever the player wants to send updates to the tanks in a scenario, this is
- * the data that will be sent. */
-struct player_update {
-    uint32_t update_items;
-    struct xy_pos* positions;
-};
-void player_update_ser(const struct message* msg, struct vector* dat);
-void player_update_des(struct message* msg, const struct vector* dat);
-void player_update_init(struct message*);
-void player_update_free(struct message*);
-
 /* USER_CREDENTIALS
  *
  * This is how users are admitted into the server and authenticated.
@@ -79,7 +69,57 @@ struct user_credentials {
 void user_credentials_ser(const struct message* msg, struct vector* dat);
 void user_credentials_des(struct message* msg, const struct vector* dat);
 void user_credentials_init(struct message*);
-void user_credentials_free(struct message*);
+void user_credentials_free(struct message *);
+
+/* PLAYER_UPDATE
+ *
+ * A player sends this mesage when they want to update their tanks.
+ *
+ * TODO: this message is pretty wasteful, since there may be lots of data which
+ *       is unchanged since the last tick. At some point, you may want to
+ *       consider optimizing this message for space.
+ */
+struct coordinate {
+    int x, y;
+};
+
+struct player_update {
+    struct vector tank_position_coords;
+    struct vector tank_target_coords;
+    struct vector tank_instructions;
+};
+void player_update_ser(const struct message *msg, struct vector *dat);
+void player_update_des(struct message *msg, const struct vector *dat);
+void player_update_init(struct message *msg);
+void player_update_free(struct message *msg);
+
+/* SCENARIO_TICK
+ *
+ * the server sends this to the player at regular intervals
+ * includes each players username, and the position of all their tanks.
+ *
+ * INFO: the usernames vector is a vector of vectors (we don't know how long a
+ *       username might be)
+
+ * TODO: including all the usernames is a bit wasteful, but it was the easiest
+ *       way to get the ball rolling on this thing. Implement some more
+ *       state-based requests for the client.
+ *
+ * FIXME: there is missing tank data in these updates (health)
+ *
+ * TODO: this message is pretty wasteful, since there may be lots of data which
+ *       is unchanged since the last tick. At some point, you may want to
+ *       consider optimizing this message for space.
+ */
+struct scenario_tick {
+    struct vector username_vecs;
+    // TODO: struct vector user_tasks ??
+    struct vector tank_positions;
+};
+void scenario_tick_ser(const struct message *msg, struct vector *dat);
+void scenario_tick_des(struct message *msg, const struct vector *dat);
+void scenario_tick_init(struct message *msg);
+void scenario_tick_free(struct message *msg);
 
 #define MESSAGE_HEADER_SIZE (sizeof(enum message_type) + sizeof(int))
 struct message {
@@ -90,8 +130,9 @@ struct message {
     // function associated with them.
     union {
         struct vector text; /// char vector
+	struct user_credentials user_credentials;
         struct player_update player_update;
-        struct user_credentials user_credentials;
+	struct scenario_tick scenario_tick;
     };
 };
 

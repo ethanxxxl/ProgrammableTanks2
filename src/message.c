@@ -7,6 +7,7 @@
 #include <string.h>
 #include <sys/socket.h>
 #include <vector.h>
+#include <tank.h>
 
 void print_hex(void *data, size_t len) {
     for (char *c = (char *)data, i = 1; c < (char *)data + len; c++, i++) {
@@ -25,6 +26,13 @@ const struct message_fns G_TEXT_FNS = {
     &text_free,
     NULL
 };
+const struct message_fns G_USER_CREDENTIALS_FNS = {
+    &user_credentials_ser,
+    &user_credentials_des,
+    &user_credentials_init,
+    &user_credentials_free,
+    NULL
+};
 const struct message_fns G_PLAYER_UPDATE_FNS = {
     &player_update_ser,
     &player_update_des,
@@ -32,11 +40,11 @@ const struct message_fns G_PLAYER_UPDATE_FNS = {
     &player_update_free,
     NULL
 };
-const struct message_fns G_USER_CREDENTIALS_FNS = {
-    &user_credentials_ser,
-    &user_credentials_des,
-    &user_credentials_init,
-    &user_credentials_free,
+const struct message_fns G_SCENARIO_TICK_FNS = {
+    &scenario_tick_ser,
+    &scenario_tick_des,
+    &scenario_tick_init,
+    &scenario_tick_free,
     NULL
 };
 
@@ -50,14 +58,12 @@ const struct message_fns* g_message_funcs[] =  {
     [MSG_REQUEST_JOIN_SCENARIO] = NULL,
 
     // SCENARIO STATE REQUESTS
-    [MSG_REQUEST_WORLD] = NULL,
-    [MSG_REQUEST_PROPOSE_UPDATE] = &G_PLAYER_UPDATE_FNS,
-
+    [MSG_REQUEST_PLAYER_UPDATE] = &G_PLAYER_UPDATE_FNS,
     [MSG_REQUEST_DEBUG] = &G_TEXT_FNS,
     [MSG_REQUEST_RETURN_TO_LOBBY] = NULL,
 
     // RESPONSES
-    [MSG_RESPONSE_WORLD_DATA] = NULL,
+    [MSG_RESPONSE_SCENARIO_TICK] = &G_SCENARIO_TICK_FNS,
 
     [MSG_RESPONSE_SUCCESS] = &G_TEXT_FNS,
     [MSG_RESPONSE_FAIL] = &G_TEXT_FNS,
@@ -172,13 +178,6 @@ void text_init(struct message* msg) {
 }
 void text_free(struct message* msg) { free_vector(&msg->text); }
 
-/* PLAYER_UPDATE_FNS
- * */
-void player_update_ser(const struct message* msg, struct vector* dat) {}
-void player_update_des(struct message* msg, const struct vector* dat) {}
-void player_update_init(struct message* msg) {}
-void player_update_free(struct message* msg) {}
-
 /* USER_CREDENTIALS_FNS
  * */
 void user_credentials_ser(const struct message* msg, struct vector* dat) {
@@ -197,16 +196,171 @@ void user_credentials_free(struct message* msg) {
     free_vector(&msg->user_credentials.username);
 }
 
+/* PLAYER_UPDATE_FNS
+ * message is encoded with the following pattern:
+ * { tank_instructions[0..n], tank_positions[0..n], tank_targets[0..n]}
+ * */
+void player_update_ser(const struct message *msg, struct vector *dat) {
+    // do a sanity check first
+    struct vector instructions = msg->player_update.tank_instructions;
+    struct vector target_coords = msg->player_update.tank_target_coords;
+    struct vector pos_coords = msg->player_update.tank_position_coords;
+
+    // lisp syntax is more succinct here:
+    // (not (= instructions.len target_coords.len pos_coords.len))
+    if ((instructions.len != target_coords.len) ||
+	(instructions.len != pos_coords.len))
+	// TODO: this should return -1.
+	return;
+
+    // add each element to the data stream.
+    vec_pushn(dat, instructions.data,
+	      instructions.len * instructions.element_len);
+    vec_pushn(dat, target_coords.data,
+	      target_coords.len * target_coords.element_len);
+    vec_pushn(dat, pos_coords.data,
+	      pos_coords.len * pos_coords.element_len);
+
+    return;
+}
+void player_update_des(struct message *msg, const struct vector *dat) {
+    // tank data is disjoint and total number of tanks isn't encoded directly in
+    // the data stream. the number of tanks is found by calculating the amount
+    // of space all the data for a single tank consumes, then dividing the byte
+    // stream length by that amount.
+    const int element_total_data =
+	sizeof(enum tank_command) + 2*sizeof(struct coordinate);
+
+    const int num_tanks = dat->len / element_total_data;
+
+    struct player_update* msg_data = &msg->player_update;
+
+    // this will point to the array that needs to be copied into each vector
+    void* data_array = dat->data;
+    
+    vec_pushn(&msg_data->tank_instructions, data_array, num_tanks);
+    data_array += msg_data->tank_instructions.element_len * num_tanks;
+    
+    vec_pushn(&msg_data->tank_position_coords, data_array, num_tanks);
+    data_array += msg_data->tank_position_coords.element_len * num_tanks;
+    
+    vec_pushn(&msg_data->tank_target_coords, data_array, num_tanks);
+
+    return;
+}
+void player_update_init(struct message *msg) {
+    // allocate members of the struct
+    struct player_update player_update;
+    make_vector(&player_update.tank_instructions,
+		sizeof(enum tank_command), 30);
+    make_vector(&player_update.tank_position_coords,
+		sizeof(struct coordinate), 30);
+    make_vector(&player_update.tank_target_coords,
+		sizeof(struct coordinate), 30);
+
+    // copy struct and return
+    msg->player_update = player_update;
+    return;    
+}
+void player_update_free(struct message *msg) {
+    struct player_update* player_update = &msg->player_update;
+    free_vector(&player_update->tank_instructions);
+    free_vector(&player_update->tank_position_coords);
+    free_vector(&player_update->tank_target_coords);
+
+    memset(player_update, 0, sizeof(struct player_update));
+    return;
+}
+
+/* SCENARIO_TICK
+ *
+ * the server sends this to the player at regular intervals.
+ *
+ * this message is encoded in the following format:
+ * { num_players, num-tanks, usernames, tank_pos }
+ * where num players are null terminated c-strings. there are num_players of
+ * them.
+ */
+void scenario_tick_ser(const struct message *msg, struct vector *dat) {
+    // do a sanity check first
+    struct vector usernames = msg->scenario_tick.username_vecs;
+    struct vector tanks_pos = msg->scenario_tick.tank_positions;
+
+    //if (usernames.len != tanks_pos.len)
+    //  return; // FIXME this should be a return -1;
+
+    // NUM_PLAYERS
+    const uint8_t num_players = usernames.len;
+    vec_push(dat, &num_players);
+
+    // NUM TANKS
+    const uint8_t num_tanks = tanks_pos.len / usernames.len;
+    vec_push(dat, &num_tanks);
+
+    // USERNAMES
+    for (int n = 0; n < num_players; n++) {
+	vec_pushn(dat, usernames.data, usernames.element_len*usernames.len);
+    }
+
+    // TANKS
+    vec_pushn(dat, tanks_pos.data, tanks_pos.element_len * tanks_pos.len);
+    return;
+}
+void scenario_tick_des(struct message *msg, const struct vector *dat) {
+    print_hex(dat->data, dat->len);
+    // NUM PLAYERS
+    uint8_t num_players;
+    vec_at(dat, 0, &num_players);
+
+    // NUM TANKS
+    uint8_t num_tanks;
+    vec_at(dat, 1, &num_tanks);
+
+    const void* data_start = dat->data + sizeof(uint8_t) * 2;
+    void const* data_end = dat->data + (dat->len * dat->element_len);
+
+    // USERNAMES
+    for (int n = 0; n < num_players; n++) {
+	int name_len = strnlen(data_start, data_end - data_start);
+	
+        struct vector username;
+	make_vector(&username, sizeof(char), name_len);
+	vec_pushn(&username, data_start, name_len);
+
+	data_start += name_len;
+	
+	vec_push(&msg->scenario_tick.username_vecs, &username);
+    }
+
+    // TANKS
+    vec_pushn(&msg->scenario_tick.tank_positions, data_start, num_tanks);
+}
+void scenario_tick_init(struct message *msg) {
+    make_vector(&msg->scenario_tick.username_vecs, sizeof(struct vector), 5);
+
+    make_vector(&msg->scenario_tick.tank_positions,
+		sizeof(struct coordinate),30);
+    return;
+}
+void scenario_tick_free(struct message *msg) {
+    // gotta free all them strings...
+    for (int n = 0; n < msg->scenario_tick.username_vecs.len; n++)
+	free_vector(vec_ref(&msg->scenario_tick.username_vecs, n));
+
+    free_vector(&msg->scenario_tick.username_vecs);
+    free_vector(&msg->scenario_tick.tank_positions);
+    return;
+}
+
 static const char *message_type_labels[] = {
     [MSG_REQUEST_AUTHENTICATE] = "MSG_REQUEST_AUTHENTICATE",
     [MSG_REQUEST_LIST_SCENARIOS] = "MSG_REQUEST_LIST_SCENARIOS",
     [MSG_REQUEST_CREATE_SCENARIO] = "MSG_REQUEST_CREATE_SCENARIO",
     [MSG_REQUEST_JOIN_SCENARIO] = "MSG_REQUEST_JOIN_SCENARIO",
-    [MSG_REQUEST_WORLD] = "MSG_REQUEST_WORLD",
-    [MSG_REQUEST_PROPOSE_UPDATE] = "MSG_REQUEST_PROPOSE_UPDATE",
+    [MSG_REQUEST_PLAYER_UPDATE] = "MSG_REQUEST_PROPOSE_UPDATE",
     [MSG_REQUEST_DEBUG] = "MSG_REQUEST_DEBUG",
     [MSG_REQUEST_RETURN_TO_LOBBY] = "MSG_REQUEST_RETURN_TO_LOBBY",
-    [MSG_RESPONSE_WORLD_DATA] = "MSG_RESPONSE_WORLD_DATA",
+    [MSG_RESPONSE_SCENARIO_TICK] = "MSG_RESPONSE_SCENARIO_TICK",
     [MSG_RESPONSE_SUCCESS] = "MSG_RESPONSE_SUCCESS",
     [MSG_RESPONSE_FAIL] = "MSG_RESPONSE_FAIL",
     [MSG_RESPONSE_INVALID_REQUEST] = "MSG_RESPONSE_INVALID_REQUEST",
@@ -230,6 +384,8 @@ void print_message(struct message msg) {
     case MSG_REQUEST_AUTHENTICATE:
         printf(" [username] %s\n", (char*)msg.user_credentials.username.data);
 
+    case MSG_RESPONSE_SCENARIO_TICK:
+	break;
     default:
         break;
     }
