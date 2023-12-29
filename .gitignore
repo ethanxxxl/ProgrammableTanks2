@@ -1,0 +1,5 @@
+target/
+compile_commands.json
+autorun.sh
+a.out
+.cache/
