@@ -3,6 +3,7 @@
 #include <netinet/in.h>
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/socket.h>
@@ -97,9 +98,12 @@ int message_send(int fd, const struct message msg) {
 
 int message_recv(int fd, struct message* msg, struct vector* buf) {
     /* DETERMINE AMOUNT OF DATA TO READ */
+    const uint8_t *buf_data = (uint8_t *)buf->data;
+
+    // FIXME: this should probably be a fixed width integer
     int body_size = 0;
     if (buf->len >= MESSAGE_HEADER_SIZE) {
-        body_size = *(int *)(buf->data + sizeof(enum message_type));
+	body_size = *(int *)(buf_data + sizeof(enum message_type));
     }
 
     int read_amnt = buf->len - MESSAGE_HEADER_SIZE + body_size;
@@ -115,7 +119,7 @@ int message_recv(int fd, struct message* msg, struct vector* buf) {
 
     // update body_size to match header data, if able.
     if (buf->len >= MESSAGE_HEADER_SIZE) {
-        body_size = *(int *)(buf->data + sizeof(enum message_type));
+        body_size = *(int *)(buf_data + sizeof(enum message_type));
     }
 
     if (buf->len < MESSAGE_HEADER_SIZE ||
@@ -128,7 +132,7 @@ int message_recv(int fd, struct message* msg, struct vector* buf) {
     msg->type = *(enum message_type *)buf->data;
 
     // remove the header from the vector, so it only contains the body.
-    for (int i = 0; i < MESSAGE_HEADER_SIZE; i++)
+    for (unsigned int i = 0; i < MESSAGE_HEADER_SIZE; i++)
         vec_rem(buf, 0);
 
     if (g_message_funcs[msg->type] != NULL) {
@@ -236,7 +240,7 @@ void player_update_des(struct message *msg, const struct vector *dat) {
     struct player_update* msg_data = &msg->player_update;
 
     // this will point to the array that needs to be copied into each vector
-    void* data_array = dat->data;
+    uint8_t* data_array = dat->data;
     
     vec_pushn(&msg_data->tank_instructions, data_array, num_tanks);
     data_array += msg_data->tank_instructions.element_len * num_tanks;
@@ -316,12 +320,19 @@ void scenario_tick_des(struct message *msg, const struct vector *dat) {
     uint8_t num_tanks;
     vec_at(dat, 1, &num_tanks);
 
-    const void* data_start = dat->data + sizeof(uint8_t) * 2;
-    void const* data_end = dat->data + (dat->len * dat->element_len);
+    uint8_t const* dat_data = (uint8_t *)dat->data;
+    const uint8_t* data_start = dat_data + sizeof(uint8_t) * 2;
+    uint8_t const* data_end = dat_data + (dat->len * dat->element_len);
 
     // USERNAMES
     for (int n = 0; n < num_players; n++) {
-	int name_len = strnlen(data_start, data_end - data_start);
+	char* name_end = memchr(data_start, '\0', data_end - data_start);
+
+	// FIXME: this should return an error!
+        if (name_end == NULL)
+	    return;
+
+	int name_len = name_end - (char *)data_start;
 	
         struct vector username;
 	make_vector(&username, sizeof(char), name_len);
@@ -344,7 +355,7 @@ void scenario_tick_init(struct message *msg) {
 }
 void scenario_tick_free(struct message *msg) {
     // gotta free all them strings...
-    for (int n = 0; n < msg->scenario_tick.username_vecs.len; n++)
+    for (size_t n = 0; n < msg->scenario_tick.username_vecs.len; n++)
 	free_vector(vec_ref(&msg->scenario_tick.username_vecs, n));
 
     free_vector(&msg->scenario_tick.username_vecs);

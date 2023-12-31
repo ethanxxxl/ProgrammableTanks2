@@ -4,8 +4,8 @@
 # @file
 # @version 0.1
 
-CC = gcc
-CFLAGS = -Wall -g
+CC = clang
+CFLAGS = -Wall -Wextra -Werror -pedantic -ftrapv -std=gnu17 -g 
 
 SRCDIR = src
 BUILDDIR = target
@@ -22,18 +22,19 @@ OBJ_CLIENT = $(patsubst $(SRCDIR)/%.c,$(BUILDDIR)/%.o,$(SRC_CLIENT))
 OBJ = $(OBJ_COMMON) $(OBJ_SERVER) $(OBJ_CLIENT)
 
 INC = -I./include/
-LIB = -lSDL2 -lm -pthread
+LIB_CLIENT = -lSDL2 -lm -pthread
+LIB_SERVER = -pthread -lm
 
 all: $(BUILDDIR)/server $(BUILDDIR)/client
 
 $(BUILDDIR)/server: $(OBJ_SERVER) 
-	$(CC) $(CFLAGS) $(LIB) $(INC) -o $@ $(OBJ_SERVER)
+	$(CC) $(CFLAGS) $(LIB_SERVER) $(INC) -o $@ $(OBJ_SERVER)
 
 $(BUILDDIR)/client: $(OBJ_CLIENT)
-	$(CC) $(CFLAGS) $(LIB) $(INC) -o $@ $(OBJ_CLIENT)
+	$(CC) $(CFLAGS) $(LIB_CLIENT) $(INC) -o $@ $(OBJ_CLIENT)
 
 $(BUILDDIR)/%.o: $(SRCDIR)/%.c
-	$(CC) $(CFLAGS) $(LIB) $(INC) -c $< -o $@
+	$(CC) $(CFLAGS) $(INC) -c $< -o $@
 
 clean:
 	rm -f $(OBJ)

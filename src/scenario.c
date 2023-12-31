@@ -1,4 +1,5 @@
 #include <message.h>
+#include <stddef.h>
 #include <vector.h>
 #include <math.h>
 #include <scenario.h>
@@ -32,7 +33,7 @@ int scenario_add_player(struct scenario *scene, struct player_manager *player) {
 }
 
 int scenario_rem_player(struct scenario *scene, struct player_manager *player) {
-    int actor_id;
+    size_t actor_id;
 
     // find the actor corresponding to player.
     for (actor_id = 0; actor_id < scene->actors.len; actor_id++) {
@@ -52,7 +53,7 @@ int scenario_rem_player(struct scenario *scene, struct player_manager *player) {
 struct actor *scenario_find_actor(struct scenario *scene,
 				  struct player_manager *player) {
     // find the actor corresponding to player.
-    for (int actor_id = 0; actor_id < scene->actors.len; actor_id++) {
+    for (size_t actor_id = 0; actor_id < scene->actors.len; actor_id++) {
         struct actor* a = vec_ref(&scene->actors, actor_id);
         if (a->player != player)
             continue; // this isn't the player, keep looking.
@@ -66,8 +67,8 @@ struct actor *scenario_find_actor(struct scenario *scene,
 /// returns a reference to the tank in the scenario. Actor and Tank IDs are
 /// simply their index in their respective arrays.
 struct tank* scenario_get_tank(struct scenario *scene,
-                               int actor_id,
-                               int tank_id) {
+                               size_t actor_id,
+                               size_t tank_id) {
     if (tank_id >= TANKS_IN_SCENARIO || actor_id >= scene->actors.len)
         return NULL;
 
@@ -93,7 +94,7 @@ void scenario_fire_tank(struct scenario *scene, struct tank* tank) {
         return;
 
     struct tank* target = NULL;
-    for (int p = 0; p < scene->actors.len; p++) {
+    for (size_t p = 0; p < scene->actors.len; p++) {
         for (int t = 0; t < TANKS_IN_SCENARIO; t++) {
             struct tank* other = scenario_get_tank(scene, p, t);
 
@@ -149,16 +150,16 @@ int scenario_tick(struct scenario *scene) {
      */
 
     for (int t = 0; t < TANKS_IN_SCENARIO; t++) {
-        for (int a = 0; a < scene->actors.len; a++) {
+        for (size_t a = 0; a < scene->actors.len; a++) {
             scenario_heal_tank(scenario_get_tank(scene, a, t));
         }
 
-        for (int a = 0; a < scene->actors.len; a++) {
+        for (size_t a = 0; a < scene->actors.len; a++) {
             scenario_fire_tank(scene,
                                scenario_get_tank(scene, a, t));
         }
 
-        for (int a = 0; a < scene->actors.len; a++) {
+        for (size_t a = 0; a < scene->actors.len; a++) {
             scenario_move_tank(scenario_get_tank(scene, a, t));
         }
     }
@@ -186,7 +187,7 @@ int scenario_handler(struct scenario *scene) {
     struct message msg;
     make_message(&msg, MSG_RESPONSE_SCENARIO_TICK);
 
-    for (int u = 0; u < scene->actors.len; u++) {
+    for (size_t u = 0; u < scene->actors.len; u++) {
 	const struct actor* actor = vec_ref(&scene->actors, u);
 	struct vector username;
 
@@ -205,7 +206,7 @@ int scenario_handler(struct scenario *scene) {
     }
 
     // send the newly created message.        
-    for (int a = 0; a < scene->actors.len; a++) {
+    for (size_t a = 0; a < scene->actors.len; a++) {
         struct actor actor;
         vec_at(&scene->actors, a, &actor);
 

@@ -9,7 +9,7 @@
 extern struct scenario g_scenario;
 
 int make_player(struct player_manager *p) {
-
+    (void)p; // we don't need to allocate anything currently.
     return 0;
 }
 
@@ -142,5 +142,6 @@ int player_scenario_handler(struct player_manager *p, struct message msg) {
 }
 
 void print_player(struct player_manager *p) {
-    printf("[player %p]\n  state: %d\n  username: %s\n\n", p, p->state, p->username);
+    printf("[player %p]\n  state: %d\n  username: %s\n\n",
+	   (void *)p, p->state, p->username);
 }

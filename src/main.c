@@ -135,6 +135,8 @@ void handle_client(struct player_manager* p, struct vector *msg_buf) {
 
 // this function handles all requests from clients.
 void* client_request_thread(void *arg) {
+    (void)arg; // arg is unused.
+    
     while (g_run) {	
 	// you will handle stuff here, like printing debug messages!
 	for (int i = 0; i < g_connections_len; i++) {
