@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <vector.h>
@@ -15,9 +16,13 @@ int make_vector(struct vector *vec, size_t elem_len, size_t size_hint) {
     if (vec->data == NULL) {
         return -1;
     }
-    
+
+
     vec->element_len = elem_len;
     vec->len = 0;
+
+    // initialize newly allocated memory
+    memset(vec->data, 0, vec->element_len * vec->capacity);
 
     return 0;
 }
@@ -34,13 +39,16 @@ int vec_reserve(struct vector *vec, size_t n) {
 
     // reserve twice as much as requested, to reduce reallocs.
     void *tmp = realloc(vec->data, vec->element_len * n*2);
-    
     if (tmp == NULL) {
         return -1;
     }
 
     vec->data = tmp;
     vec->capacity = n*2;
+
+    // inialize newly allocated memory
+    void *data_start = vec_ref(vec, vec->len);
+    memset(data_start, 0, vec->element_len * (vec->capacity - vec->len));
 
     return 0;
 }

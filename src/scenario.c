@@ -1,5 +1,8 @@
+#include <arpa/inet.h>
 #include <message.h>
+#include <netinet/in.h>
 #include <stddef.h>
+#include <string.h>
 #include <vector.h>
 #include <math.h>
 #include <scenario.h>
@@ -193,7 +196,8 @@ int scenario_handler(struct scenario *scene) {
 
         // FIXME: the username may not always be limited to 50 chars.
         make_vector(&username, sizeof(char), 50);
-        vec_pushn(&username, actor->player->username, 50);
+        size_t name_len = strnlen(actor->player->username, 50);
+        vec_pushn(&username, actor->player->username, name_len);
 
         vec_push(&msg.scenario_tick.username_vecs, &username);
 
@@ -209,6 +213,13 @@ int scenario_handler(struct scenario *scene) {
     for (size_t a = 0; a < scene->actors.len; a++) {
         struct actor actor;
         vec_at(&scene->actors, a, &actor);
+
+        #ifdef DEBUG
+        struct sockaddr_in player_a = *(struct sockaddr_in *)(&actor.player->address);
+        struct in_addr a = player_a.sin_addr;
+        printf("socket: %d, addr: %s\n", actor.player->socket,
+               inet_ntoa(a));
+        #endif
 
         message_send(actor.player->socket, msg);
     }

@@ -98,18 +98,22 @@ int message_send(int fd, const struct message msg) {
 
 int message_recv(int fd, struct message* msg, struct vector* buf) {
     /* DETERMINE AMOUNT OF DATA TO READ */
-    const uint8_t *buf_data = (uint8_t *)buf->data;
+
 
     // FIXME: this should probably be a fixed width integer
-    int body_size = 0;
+    int body_size = 0; // amount to read based off of length in header
     if (buf->len >= MESSAGE_HEADER_SIZE) {
-        body_size = *(int *)(buf_data + sizeof(enum message_type));
+        body_size = *(int *)((uint8_t *)buf->data + sizeof(enum message_type));
     }
-
+     
     int read_amnt = buf->len - MESSAGE_HEADER_SIZE + body_size;
+
+    if (read_amnt < 0)
+        read_amnt = MESSAGE_HEADER_SIZE; // when buf->len = 0, then read_ammnt < 0.
 
     /* READ AS MUCH DATA AS POSSIBLE */
     vec_reserve(buf, buf->len + read_amnt);
+    const uint8_t *buf_data = (uint8_t *)buf->data;
     int bytes_read = recv(fd, vec_ref(buf, buf->len), read_amnt, 0);
 
     if (bytes_read <= 0)
@@ -303,7 +307,8 @@ void scenario_tick_ser(const struct message *msg, struct vector *dat) {
 
     // USERNAMES
     for (int n = 0; n < num_players; n++) {
-        vec_pushn(dat, usernames.data, usernames.element_len*usernames.len);
+        struct vector *username = vec_ref(&usernames, n);
+        vec_pushn(dat, username->data, username->element_len*username->len);
     }
 
     // TANKS
@@ -311,7 +316,6 @@ void scenario_tick_ser(const struct message *msg, struct vector *dat) {
     return;
 }
 void scenario_tick_des(struct message *msg, const struct vector *dat) {
-    print_hex(dat->data, dat->len);
     // NUM PLAYERS
     uint8_t num_players;
     vec_at(dat, 0, &num_players);
@@ -355,11 +359,18 @@ void scenario_tick_init(struct message *msg) {
 }
 void scenario_tick_free(struct message *msg) {
     // gotta free all them strings...
-    for (size_t n = 0; n < msg->scenario_tick.username_vecs.len; n++)
-        free_vector(vec_ref(&msg->scenario_tick.username_vecs, n));
+    for (size_t n = 0; n < msg->scenario_tick.username_vecs.len; n++) {
+        struct vector *name_str = vec_ref(&msg->scenario_tick.username_vecs, n);
+        //printf("free_vec(%p); -> frees %p (name_str)\n", (void *)name_str, name_str->data);
+        free_vector(name_str);
+    }
 
-    free_vector(&msg->scenario_tick.username_vecs);
-    free_vector(&msg->scenario_tick.tank_positions);
+    struct vector *usernames = &msg->scenario_tick.username_vecs;
+    struct vector *tanks = &msg->scenario_tick.tank_positions;
+    //printf("free_vec(%p); -> frees %p; (usernames)\n", (void *)usernames, usernames->data);
+    //printf("free_vec(%p); -> frees %p; (tanks)\n", (void *)tanks, tanks->data);
+    free_vector(usernames);
+    free_vector(tanks);
     return;
 }
 
@@ -394,8 +405,17 @@ void print_message(struct message msg) {
 
     case MSG_REQUEST_AUTHENTICATE:
         printf(" [username] %s\n", (char*)msg.user_credentials.username.data);
+        break;
 
     case MSG_RESPONSE_SCENARIO_TICK:
+        printf(" [users]\n");
+        for (size_t i = 0; i < msg.scenario_tick.username_vecs.len; i++) {
+            struct vector *username =
+                vec_ref(&msg.scenario_tick.username_vecs, i);
+            printf("   %s\n", (char*)username->data);
+        }
+
+        printf(" [tanks] %zu\n", msg.scenario_tick.tank_positions.len);
         break;
     default:
         break;
