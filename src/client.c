@@ -365,21 +365,16 @@ void *read_msg_thread(void *arg) {
         switch (msg.type) {
         case MSG_RESPONSE_SCENARIO_TICK: {
             struct scenario_tick body = msg.scenario_tick;
-            printf("users: %zu | ", body.username_vecs.len);
             for (size_t u = 0; u < body.username_vecs.len; u++) {
                 players_update_player(vec_ref(&body.username_vecs, u),
                                       vec_ref(&body.tank_positions, u));
-                printf("%s | ", (char*)body.username_vecs.data);
             }
-            printf("\n");
-            print_message(msg);
-
-
         } break;            
         default:
             break;
         }
-        
+
+        print_message(msg);
         free_message(msg);
     }
     
