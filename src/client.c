@@ -47,11 +47,11 @@ void players_update_player(char *username, struct vector *tanks) {
     // see if the player exists in the structure.
     struct player *player = NULL;
     for (size_t p = 0; p < g_players.len; p++) {
-	player = vec_ref(&g_players, p);
-	int status = strcmp(username, player->username);
+        player = vec_ref(&g_players, p);
+        int status = strcmp(username, player->username);
 
-	if (status == 0)
-	    goto update_player;
+        if (status == 0)
+            goto update_player;
     }
     // emulated for-else syntax from python
     // this is the else case, we didn't find the player.
@@ -68,12 +68,11 @@ update_player: ; // can't have a declaration after a label in cstd < c2x
         num_tanks = tanks->len;
 
     for (int t = 0; t < num_tanks; t++) {
-	struct tank *tank = vec_ref(&player->tanks, t);
-	vec_at(tanks, t, tank);
+        struct Tank *tank = vec_ref(&player->tanks, t);
+        vec_at(tanks, t, tank);
     }
     return;
 }
-
 
 /*
 ** forward declarations
@@ -120,9 +119,9 @@ void change_state(int argc, char **argv) {
 
     struct message msg;
     if (strcmp(argv[1], "scene") == 0) {
-	make_message(&msg, MSG_REQUEST_JOIN_SCENARIO);
+        make_message(&msg, MSG_REQUEST_JOIN_SCENARIO);
     } else if (strcmp(argv[1], "lobby") == 0) {
-	make_message(&msg, MSG_REQUEST_RETURN_TO_LOBBY);
+        make_message(&msg, MSG_REQUEST_RETURN_TO_LOBBY);
     } else {
         printf("ERROR: valid options are \"scene\" or \"lobby\"\n");
     return;
@@ -148,12 +147,12 @@ void update_tank(int argc, char **argv) {
 void list_tanks(int argc, char **argv) {
     (void)argc; (void)argv;    
     for (size_t p = 0; p < g_players.len; p++) {
-	struct player *player = vec_ref(&g_players, p);
-	printf("[tanks for %s]\n", player->username);
-	for (size_t t = 0; t < player->tanks.len; t++) {
-	    struct tank *tank = vec_ref(&player->tanks, t);
-	    printf("  [%zu] x: %d y: %d\n", t, tank->x, tank->y);
-	}
+        struct player *player = vec_ref(&g_players, p);
+        printf("[tanks for %s]\n", player->username);
+        for (size_t t = 0; t < player->tanks.len; t++) {
+            struct tank *tank = vec_ref(&player->tanks, t);
+            printf("  [%zu] x: %d y: %d\n", t, tank->x, tank->y);
+        }
     }
 }
 
@@ -361,30 +360,30 @@ void *read_msg_thread(void *arg) {
         int status = message_recv(g_server_sock, &msg, &msg_buf);
 
         if (status < 0)
-	    continue;
+            continue;
 
-	switch (msg.type) {
-	case MSG_RESPONSE_SCENARIO_TICK: {
-	    struct scenario_tick body = msg.scenario_tick;
-	    printf("users: %zu | ", body.username_vecs.len);
-	    for (size_t u = 0; u < body.username_vecs.len; u++) {
-		players_update_player(vec_ref(&body.username_vecs, u),
-				      vec_ref(&body.tank_positions, u));
-		printf("%s | ", (char*)body.username_vecs.data);
-	    }
-	    printf("\n");
-	    print_message(msg);
+        switch (msg.type) {
+        case MSG_RESPONSE_SCENARIO_TICK: {
+            struct scenario_tick body = msg.scenario_tick;
+            printf("users: %zu | ", body.username_vecs.len);
+            for (size_t u = 0; u < body.username_vecs.len; u++) {
+                players_update_player(vec_ref(&body.username_vecs, u),
+                                      vec_ref(&body.tank_positions, u));
+                printf("%s | ", (char*)body.username_vecs.data);
+            }
+            printf("\n");
+            print_message(msg);
 
 
-	} break;	    
-	default:
-	    break;
-	}
-
-	
-	free_message(msg);
+        } break;            
+        default:
+            break;
+        }
+        
+        free_message(msg);
     }
-
+    
+    free_vector(&msg_buf);
     return NULL;
 }
 
@@ -417,14 +416,14 @@ void gfx_render_rect(SDL_Renderer* renderer, SDL_Rect* cam, SDL_Rect* rect) {
 }
 
 void gfx_render_grid(SDL_Renderer* renderer, SDL_Rect* cam, const SDL_Rect* tile,
-		     int spacing, int rows, int cols, uint8_t fg[3], uint8_t bg[3]) {
+                     int spacing, int rows, int cols, uint8_t fg[3], uint8_t bg[3]) {
 
     SDL_Rect drawn_tile = *tile;
     SDL_Rect canvas = {
-	.x = drawn_tile.x - 5,
-	.y = drawn_tile.y - 5,
-	.w = cols * (drawn_tile.w + spacing) + 10,
-	.h = rows * (drawn_tile.h + spacing) + 10
+        .x = drawn_tile.x - 5,
+        .y = drawn_tile.y - 5,
+        .w = cols * (drawn_tile.w + spacing) + 10,
+        .h = rows * (drawn_tile.h + spacing) + 10
     };
 
     // clear the ground first
@@ -437,11 +436,11 @@ void gfx_render_grid(SDL_Renderer* renderer, SDL_Rect* cam, const SDL_Rect* tile
         for (int y = 0; y < rows; y++) {
             gfx_render_rect(renderer, cam, &drawn_tile);
 
-	    drawn_tile.y += drawn_tile.h + spacing;
+            drawn_tile.y += drawn_tile.h + spacing;
         }
 
-	drawn_tile.y = canvas.y + 5;
-	drawn_tile.x += drawn_tile.w + spacing;
+        drawn_tile.y = canvas.y + 5;
+        drawn_tile.x += drawn_tile.w + spacing;
     }
 }
 
@@ -505,30 +504,30 @@ void *gfx_thread(void *arg) {
                                SDL_ALPHA_OPAQUE);
 
         SDL_RenderClear(renderer);
-	const int grid_spacing = 1;
+        const int grid_spacing = 1;
         gfx_render_grid(renderer, &camera, &tile, grid_spacing,
                         g_map_height, g_map_width, bg_colors, fg_colors);
 
-	for (size_t p = 0; p < g_players.len; p++) {
-	    struct player *player = vec_ref(&g_players, p);
-	    struct vector tanks = player->tanks;
-	    	    
-	    for (size_t t = 0; t < tanks.len; t++) {
-		struct tank tank;
-		vec_at(&tanks, t, &tank);
+        for (size_t p = 0; p < g_players.len; p++) {
+            struct player *player = vec_ref(&g_players, p);
+            struct vector tanks = player->tanks;
+                    
+            for (size_t t = 0; t < tanks.len; t++) {
+                struct tank tank;
+                vec_at(&tanks, t, &tank);
 
-		SDL_Rect tank_tile = {
-		    .x = tank.x * (tile.w + grid_spacing),
-		    .y = tank.y * (tile.h + grid_spacing),
-		    .w = tile.w,
-		    .h = tile.h
-		};
+                SDL_Rect tank_tile = {
+                    .x = tank.x * (tile.w + grid_spacing),
+                    .y = tank.y * (tile.h + grid_spacing),
+                    .w = tile.w,
+                    .h = tile.h
+                };
 
-		// TODO: Render different color for each player
-		SDL_SetRenderDrawColor(renderer, 0, 0, 0, SDL_ALPHA_OPAQUE);
-		gfx_render_rect(renderer, &camera, &tank_tile);
-	    }
-	}
+                // TODO: Render different color for each player
+                SDL_SetRenderDrawColor(renderer, 0, 0, 0, SDL_ALPHA_OPAQUE);
+                gfx_render_rect(renderer, &camera, &tank_tile);
+            }
+        }
 
         SDL_RenderPresent(renderer);
 

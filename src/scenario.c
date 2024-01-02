@@ -51,14 +51,14 @@ int scenario_rem_player(struct scenario *scene, struct player_manager *player) {
 }
 
 struct actor *scenario_find_actor(struct scenario *scene,
-				  struct player_manager *player) {
+                          struct player_manager *player) {
     // find the actor corresponding to player.
     for (size_t actor_id = 0; actor_id < scene->actors.len; actor_id++) {
         struct actor* a = vec_ref(&scene->actors, actor_id);
         if (a->player != player)
             continue; // this isn't the player, keep looking.
 
-	return vec_ref(&scene->actors, actor_id);
+        return vec_ref(&scene->actors, actor_id);
     }
 
     return NULL;
@@ -188,21 +188,21 @@ int scenario_handler(struct scenario *scene) {
     make_message(&msg, MSG_RESPONSE_SCENARIO_TICK);
 
     for (size_t u = 0; u < scene->actors.len; u++) {
-	const struct actor* actor = vec_ref(&scene->actors, u);
-	struct vector username;
+        const struct actor* actor = vec_ref(&scene->actors, u);
+        struct vector username;
 
-	// FIXME: the username may not always be limited to 50 chars.
-	make_vector(&username, sizeof(char), 50);
-	vec_pushn(&username, actor->player->username, 50);
+        // FIXME: the username may not always be limited to 50 chars.
+        make_vector(&username, sizeof(char), 50);
+        vec_pushn(&username, actor->player->username, 50);
 
-	vec_push(&msg.scenario_tick.username_vecs, &username);
+        vec_push(&msg.scenario_tick.username_vecs, &username);
 
-	// add tanks
-	for (int t = 0; t < TANKS_IN_SCENARIO; t++) {
-	    struct tank tank = actor->tanks[t];
-	    struct coordinate xy = {.x = tank.x, .y = tank.y};
-	    vec_push(&msg.scenario_tick.tank_positions, &xy);
-	}
+        // add tanks
+        for (int t = 0; t < TANKS_IN_SCENARIO; t++) {
+            struct tank tank = actor->tanks[t];
+            struct coordinate xy = {.x = tank.x, .y = tank.y};
+            vec_push(&msg.scenario_tick.tank_positions, &xy);
+        }
     }
 
     // send the newly created message.        
@@ -210,7 +210,7 @@ int scenario_handler(struct scenario *scene) {
         struct actor actor;
         vec_at(&scene->actors, a, &actor);
 
-	message_send(actor.player->socket, msg);
+        message_send(actor.player->socket, msg);
     }
 
     free_message(msg);

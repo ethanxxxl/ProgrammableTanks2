@@ -5,15 +5,15 @@
 
 int make_vector(struct vector *vec, size_t elem_len, size_t size_hint) {
     if (size_hint > 0) {
-	vec->data = malloc(elem_len * size_hint);
-	vec->capacity = size_hint;
+        vec->data = malloc(elem_len * size_hint);
+        vec->capacity = size_hint;
     } else {
-	vec->data = malloc(elem_len * 10);
-	vec->capacity = 10;
+        vec->data = malloc(elem_len * 10);
+        vec->capacity = 10;
     }
 
     if (vec->data == NULL) {
-	return -1;
+        return -1;
     }
     
     vec->element_len = elem_len;
@@ -30,13 +30,13 @@ int free_vector(struct vector *vec) {
 
 int vec_reserve(struct vector *vec, size_t n) {
     if (vec->capacity > n)
-	return 0;
+        return 0;
 
     // reserve twice as much as requested, to reduce reallocs.
     void *tmp = realloc(vec->data, vec->element_len * n*2);
     
     if (tmp == NULL) {
-	return -1;
+        return -1;
     }
 
     vec->data = tmp;
@@ -49,7 +49,7 @@ int vec_push(struct vector *vec, const void *src) {
     vec_reserve(vec, vec->len+1);
     
     memcpy(vec_ref(vec, vec->len),
-	   src, vec->element_len);
+           src, vec->element_len);
 
     vec->len++;
 
@@ -72,7 +72,7 @@ int vec_resize(struct vector *vec, size_t n) {
 
 int vec_pop(struct vector *vec, void *dst) {
     if (dst != NULL)
-	memcpy(dst, vec_ref(vec, vec->len), vec->element_len);
+        memcpy(dst, vec_ref(vec, vec->len), vec->element_len);
 
     vec->len--;
 
@@ -81,16 +81,16 @@ int vec_pop(struct vector *vec, void *dst) {
 
 int vec_rem(struct vector *vec, size_t n) {
     if (n > vec->len)
-	return -1;
+        return -1;
 
     if (n == vec->len - 1) {
-	vec_pop(vec, NULL);
-	return 0;
+        vec_pop(vec, NULL);
+        return 0;
     }
     
     memmove(vec_ref(vec, n),
-	    vec_ref(vec, n+1),
-	    (vec->len - n - 1) * vec->element_len);
+            vec_ref(vec, n+1),
+            (vec->len - n - 1) * vec->element_len);
 
     vec->len--;
     
@@ -99,8 +99,8 @@ int vec_rem(struct vector *vec, size_t n) {
 
 int vec_at(const struct vector *vec, size_t n, void *dst) {
     memcpy(dst,
-	   vec_ref(vec, n),
-	   vec->element_len);
+           vec_ref(vec, n),
+           vec->element_len);
     
     return 0;
 }
@@ -111,8 +111,8 @@ void* vec_ref(const struct vector *vec, size_t n) {
 
 int vec_set(const struct vector *vec, size_t n, void* src) {
     memcpy(vec_ref(vec, n),
-	   src,
-	   vec->element_len);
+           src,
+           vec->element_len);
     
     return 0;
 }

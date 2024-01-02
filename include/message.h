@@ -130,9 +130,9 @@ struct message {
     // function associated with them.
     union {
         struct vector text; /// char vector
-	struct user_credentials user_credentials;
+        struct user_credentials user_credentials;
         struct player_update player_update;
-	struct scenario_tick scenario_tick;
+        struct scenario_tick scenario_tick;
     };
 };
 

@@ -47,7 +47,7 @@ int scenario_add_player(struct scenario *scene, struct player_manager *player);
 int scenario_rem_player(struct scenario *scene, struct player_manager *player);
 
 struct actor* scenario_find_actor(struct scenario *scene,
-				  struct player_manager *player);
+                          struct player_manager *player);
 
 /// Runs updates on everything in the scenario:
 ///  tank health
