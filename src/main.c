@@ -1,4 +1,3 @@
-#include "message.h"
 #include "player_manager.h"
 #include <stddef.h>
 #include <stdio.h>
@@ -52,6 +51,9 @@ void *accept_connections_thread(void* port_num) {
     listen(sock, 1);
     g_connections_len = 0;
 
+    printf("] server started on %s port %d\n",
+           inet_ntoa(name.sin_addr), name.sin_port);
+    
     while (g_run) {
         struct sockaddr client_addr;
         socklen_t client_size;
@@ -151,6 +153,20 @@ void* client_request_thread(void *arg) {
     return NULL;
 }
 
+char g_welcome_message[] = "\
+--Welcome to the Programable Tanks 2 server!--\n\
+\n\
+This server is a work in progress and currently manages multiple connected\n\
+clients, as well as a single scenario. Clients that implement this messaging\n\
+protocol may connect to the server, authenticate themselves, and then join the\n\
+scenario.\n\
+\n\
+For debugging purposes, this program prints out all messages it receives from\n\
+connected clients, along with other miscellaneous information.\n\
+\n\
+This simulation is written and maintained by Ethan Smith.\n";
+
+
 int main(int argc, char** argv) {
     int port_num = 4444;
     if (argc == 2)
@@ -158,6 +174,8 @@ int main(int argc, char** argv) {
     
     make_scenario(&g_scenario);
     
+    puts(g_welcome_message);
+
     // start networking thread
     g_run = true;
 

@@ -555,6 +555,18 @@ void *gfx_thread(void *arg) {
     return NULL;
 }
 
+char g_welcome_message[] = "\
+--Welcome to  Programable Tanks 2!--\n\
+\n\
+This client estabilishes a connection between the scenario servers and your\n\
+control code. Included also is a graphical display of the scenario, allowing you\n\
+to monitor the progress of the match. This program is a work in progress.\n\
+\n\
+The `help' command will provide a listing of all commands available to you,\n\
+along with a brief description of their operation.\n\
+\n\
+This program is written and maintained by Ethan Smith.\n";
+
 int main(int argc, char **argv) {
     (void)argc;
     (void)argv;
@@ -570,6 +582,8 @@ int main(int argc, char **argv) {
     
     char* buff = malloc(50);
     size_t buff_size = 50;
+
+    puts(g_welcome_message);
     
     while (g_run_program) {
         printf("> ");
