@@ -8,7 +8,6 @@
 // the global scenario
 extern struct scenario g_scenario;
 
-
 enum SCENARIO_OBJECTIVES {
     DEFEND_POSITION,
     ATTACK_POSITION,
@@ -41,13 +40,13 @@ int make_scenario(struct scenario *scene);
 int free_scenario(const struct scenario *scene);
 
 /* Adds a new player to the scenario. The player will must choose
- an objective before it may begin the scenario.
+   an objective before it may begin the scenario.
 */
 int scenario_add_player(struct scenario *scene, struct player_manager *player);
 int scenario_rem_player(struct scenario *scene, struct player_manager *player);
 
-struct actor* scenario_find_actor(struct scenario *scene,
-                          struct player_manager *player);
+struct actor *scenario_find_actor(struct scenario *scene,
+                                  struct player_manager *player);
 
 /// Runs updates on everything in the scenario:
 ///  tank health

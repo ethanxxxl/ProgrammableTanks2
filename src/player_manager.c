@@ -29,14 +29,14 @@ int player_idle_handler(struct player_manager *p, struct message msg) {
                 return -1; // name was too large for the buffer.
             
             message_send_conf(p->socket, MSG_RESPONSE_SUCCESS,
-                       buf);
+                              buf);
         }
 
         break;
                  
     default: 
         message_send_conf(p->socket, MSG_RESPONSE_FAIL,
-                   "you must be authenticated first");
+                          "you must be authenticated first");
         break;
     }
 

@@ -14,7 +14,7 @@ enum tank_command {
 #define TANK_HEAL_RATE 15
 #define TANK_MAX_SPEED 5
 #define TANK_SHELL_DAMAGE 75
-struct tank {
+struct tank { // TODO change out these x/y fields with coordinate fields.
     int x,y;
     int health;
     enum tank_command cmd;

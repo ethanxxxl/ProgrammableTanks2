@@ -1,4 +1,5 @@
 #include <SDL2/SDL.h>
+#include "tank.h"
 #include "vector.h"
 #include <SDL2/SDL_events.h>
 #include <SDL2/SDL_mouse.h>
@@ -32,9 +33,8 @@ int g_server_sock;
 
 bool g_gfx_running;
 
-struct tank {
-    int x, y;
-};
+char g_username[50];
+bool g_print_msg;
 
 struct player {
     char username[50];
@@ -43,7 +43,7 @@ struct player {
 
 struct vector g_players;
 
-void players_update_player(char *username, struct vector *tanks) {
+void players_update_player(char *username, struct vector *tank_positions) {
     // see if the player exists in the structure.
     struct player *player = NULL;
     for (size_t p = 0; p < g_players.len; p++) {
@@ -63,14 +63,17 @@ void players_update_player(char *username, struct vector *tanks) {
     player = vec_ref(&g_players, g_players.len - 1);
 
 update_player: ; // can't have a declaration after a label in cstd < c2x
-    int num_tanks = player->tanks.len;
-    if ((int)tanks->len < num_tanks)
-        num_tanks = tanks->len;
+    vec_resize(&player->tanks, tank_positions->len);
 
-    for (int t = 0; t < num_tanks; t++) {
-        struct Tank *tank = vec_ref(&player->tanks, t);
-        vec_at(tanks, t, tank);
+    for (size_t t = 0; t < tank_positions->len; t++) {
+        struct coordinate coord;
+        vec_at(tank_positions, t, &coord);
+
+        struct tank *tank = vec_ref(&player->tanks, t);
+        tank->x = coord.x;
+        tank->y = coord.y;
     }
+    
     return;
 }
 
@@ -90,14 +93,15 @@ int debug_send_msg(struct message msg) {
     }
     printf("--SENDING--\n");
     print_message(msg);
-    return message_send(g_server_sock, msg);    
+    return message_send(g_server_sock, msg);
 }
 
-void propose_update(int argc, char **argv) {
+void enable_print_messages(int argc, char **argv) {
     (void)argc; (void)argv;
-    printf("proposing update...\n");
-    printf("COMMAND FAILED: NOT IMPLEMENTED\n");
+
+    g_print_msg = !g_print_msg;
 }
+
 void request_server_update(int argc, char **argv) {
     (void)argc; (void)argv;    
     printf("requesting info from server...\n");
@@ -105,7 +109,16 @@ void request_server_update(int argc, char **argv) {
 }
 
 void authenticate(int argc, char **argv) {
-    (void)argc; (void)argv;    
+    (void)argc; (void)argv;
+
+    if (argc != 2) {
+        printf("ERROR: second argument must be your username.\n");
+        return;
+    }
+
+    // copy username into global username tracker.
+    memcpy(&g_username, argv[1], strlen(argv[1]));
+    
     struct message msg;
     make_message(&msg, MSG_REQUEST_AUTHENTICATE);
     vec_pushn(&msg.user_credentials.username, argv[1], strlen(argv[1]));
@@ -140,8 +153,72 @@ void list_scenarios(int argc, char **argv) {
 }
 
 void update_tank(int argc, char **argv) {
-    (void)argc; (void)argv;    
-    // TODO fill me in
+    (void)argc; (void)argv;
+    if (argc < 3) {
+        printf("ERROR: arguments must be: update-tank: IDX X Y\n");
+        return;
+    }
+
+    // find yourself in player list
+    struct player player;
+    for (size_t p = 0; p < g_players.len; p++) {
+        vec_at(&g_players, p, &player);
+        if (strcmp(player.username, g_username) == 0)
+            goto update_tank_send_update;
+    }
+    printf("ERROR: you don't have any tanks to update!\n");
+    return;
+    
+ update_tank_send_update:;
+    int index = atoi(argv[1]);
+    int x = atoi(argv[2]);
+    int y = atoi(argv[3]);
+
+    if (index < 0 || index >= (int)player.tanks.len) {
+        printf("ERROR: you must index a valid tank!\n");
+        return;
+    }
+    
+    struct tank* tank = vec_ref(&player.tanks, index);
+    tank->move_to_x = x;
+    tank->move_to_y = y;
+    return;
+ }
+
+void propose_update(int argc, char **argv) {
+    (void)argc;
+    (void)argv;
+
+    // find yourself in player list
+    struct player player;
+    for (size_t p = 0; p < g_players.len; p++) {
+        vec_at(&g_players, p, &player);
+        if (strcmp(player.username, g_username) == 0)
+            goto propose_update_tank_send_update;
+    }
+    printf("ERROR: you don't have any tanks to update!\n");
+    return;
+
+ propose_update_tank_send_update:;
+    struct message msg;
+    make_message(&msg, MSG_REQUEST_PLAYER_UPDATE);
+
+    for (size_t t = 0; t < player.tanks.len; t++) {
+        struct tank tank;
+        vec_at(&player.tanks, t, &tank);
+        
+        enum tank_command cmd = TANK_MOVE;
+        struct coordinate coord = { .x = tank.move_to_x, .y = tank.move_to_y };
+           
+        vec_push(&msg.player_update.tank_instructions, &cmd);
+        vec_push(&msg.player_update.tank_target_coords, &coord);
+        vec_push(&msg.player_update.tank_position_coords, &coord);
+    }
+
+    debug_send_msg(msg);
+
+    free_message(msg);
+    return;
 }
 
 void list_tanks(int argc, char **argv) {
@@ -250,7 +327,7 @@ void start_gfx(int argc, char **argv) {
                    NULL,
                    &gfx_thread,
                    NULL);
-
+    
     g_gfx_running = true;
 }
 
@@ -273,7 +350,7 @@ and port is optional. (default is 127.0.0.1:4444)"},
     {"list-tanks", &list_tanks, "lists tanks for each player currently connected"},
     {"update", &propose_update,
      "NOT IMPLEMENTED"},
-    {"add-tank", &update_tank,
+    {"update-tank", &update_tank,
      "give the tank index, followed by an x and y coordinate, and that tank will move to that location."},
     {"request", &request_server_update,
      "NOT IMPLEMENTED"},
@@ -291,6 +368,9 @@ and port is optional. (default is 127.0.0.1:4444)"},
 
     {"color", &change_bg_color,
      "changes the bg color of the SDL graphics window."},
+
+    {"debug-messages", &enable_print_messages,
+     "toggles whether or not to print messages recieved from server."},
 
     {"\n", &dummy, NULL},
     {"q", &quit, "quit this client"},
@@ -347,6 +427,8 @@ void manage_commands(int argc, char **argv) {
 
 void *read_msg_thread(void *arg) {
     (void)arg; // arg is unused.
+
+    g_print_msg = false;
     
     struct message msg = {0};
     struct vector msg_buf;
@@ -364,19 +446,28 @@ void *read_msg_thread(void *arg) {
 
         switch (msg.type) {
         case MSG_RESPONSE_SCENARIO_TICK: {
+
             struct scenario_tick body = msg.scenario_tick;
             for (size_t u = 0; u < body.username_vecs.len; u++) {
-                players_update_player(vec_ref(&body.username_vecs, u),
-                                      vec_ref(&body.tank_positions, u));
+                char *username =
+                    ((struct vector *)vec_ref(&body.username_vecs, u))->data;
+
+                struct vector *tanks = vec_ref(&body.tank_positions, u);
+               
+                players_update_player(username, tanks);
             }
         } break;            
         default:
             break;
         }
 
-        print_message(msg);
+        if (g_print_msg) {
+            print_message(msg);
+        }
+        
         free_message(msg);
     }
+
     
     free_vector(&msg_buf);
     return NULL;
@@ -412,7 +503,6 @@ void gfx_render_rect(SDL_Renderer* renderer, SDL_Rect* cam, SDL_Rect* rect) {
 
 void gfx_render_grid(SDL_Renderer* renderer, SDL_Rect* cam, const SDL_Rect* tile,
                      int spacing, int rows, int cols, uint8_t fg[3], uint8_t bg[3]) {
-
     SDL_Rect drawn_tile = *tile;
     SDL_Rect canvas = {
         .x = drawn_tile.x - 5,
@@ -437,6 +527,20 @@ void gfx_render_grid(SDL_Renderer* renderer, SDL_Rect* cam, const SDL_Rect* tile
         drawn_tile.y = canvas.y + 5;
         drawn_tile.x += drawn_tile.w + spacing;
     }
+}
+
+void gfx_draw_tank(SDL_Renderer *renderer, SDL_Rect *cam, const SDL_Rect *tile,
+                   int spacing, int x, int y) {
+    SDL_Rect tank_tile = {
+        .x = x * (tile->w + spacing),
+        .y = y * (tile->h + spacing),
+        .w = tile->w,
+        .h = tile->h
+    };
+
+    // TODO: Render different color for each player
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, SDL_ALPHA_OPAQUE);
+    gfx_render_rect(renderer, cam, &tank_tile);    
 }
 
 void *gfx_thread(void *arg) {
@@ -471,7 +575,7 @@ void *gfx_thread(void *arg) {
         return NULL;
     }
 
-    renderer= SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
+    renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
     if (renderer == NULL) {
         printf("SDL could not create a renderer!\n");
         printf("SLD_Error: %s\n", SDL_GetError());
@@ -505,25 +609,14 @@ void *gfx_thread(void *arg) {
 
         for (size_t p = 0; p < g_players.len; p++) {
             struct player *player = vec_ref(&g_players, p);
-            struct vector tanks = player->tanks;
-                    
-            for (size_t t = 0; t < tanks.len; t++) {
+
+            for (size_t t = 0; t < player->tanks.len; t++) {
                 struct tank tank;
-                vec_at(&tanks, t, &tank);
-
-                SDL_Rect tank_tile = {
-                    .x = tank.x * (tile.w + grid_spacing),
-                    .y = tank.y * (tile.h + grid_spacing),
-                    .w = tile.w,
-                    .h = tile.h
-                };
-
-                // TODO: Render different color for each player
-                SDL_SetRenderDrawColor(renderer, 0, 0, 0, SDL_ALPHA_OPAQUE);
-                gfx_render_rect(renderer, &camera, &tank_tile);
+                vec_at(&player->tanks, t, &tank);
+                gfx_draw_tank(renderer, &camera, &tile, grid_spacing, tank.x, tank.y);
             }
         }
-
+        
         SDL_RenderPresent(renderer);
 
         while (SDL_PollEvent(&e)) {
@@ -590,7 +683,7 @@ int main(int argc, char **argv) {
         fflush(stdout);
 
         getline(&buff, &buff_size, stdin);
-
+        
         char* argv[10];
         int i = 0;
         for (char* token = strtok(buff, " \n");

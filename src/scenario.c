@@ -54,7 +54,7 @@ int scenario_rem_player(struct scenario *scene, struct player_manager *player) {
 }
 
 struct actor *scenario_find_actor(struct scenario *scene,
-                          struct player_manager *player) {
+                                  struct player_manager *player) {
     // find the actor corresponding to player.
     for (size_t actor_id = 0; actor_id < scene->actors.len; actor_id++) {
         struct actor* a = vec_ref(&scene->actors, actor_id);
@@ -135,10 +135,14 @@ void scenario_move_tank(struct tank *tank) {
         return;
     }
 
+    printf("tank moving too far (%f), doing a partial move.\n", move_distance);
+
     // otherwise, we can only move the max distance. move the tank
     // TANK_MAX_SPEED units in the direction of xx and yy.
     tank->x += roundf(((xx - x) / move_distance) * TANK_MAX_SPEED);
     tank->y += roundf(((yy - y) / move_distance) * TANK_MAX_SPEED);
+    printf("move_to x/y: %d, %d\nnew x/y: %d, %d\n",
+           xx, yy, tank->x, tank->y);
     return;
 }
 
@@ -197,17 +201,24 @@ int scenario_handler(struct scenario *scene) {
         // FIXME: the username may not always be limited to 50 chars.
         make_vector(&username, sizeof(char), 50);
         size_t name_len = strnlen(actor->player->username, 50);
-        vec_pushn(&username, actor->player->username, name_len);
+        vec_pushn(&username, actor->player->username, name_len + 1); // include null terminator
 
         vec_push(&msg.scenario_tick.username_vecs, &username);
 
         // add tanks
-        for (int t = 0; t < TANKS_IN_SCENARIO; t++) {
-            struct tank tank = actor->tanks[t];
-            struct coordinate xy = {.x = tank.x, .y = tank.y};
-            vec_push(&msg.scenario_tick.tank_positions, &xy);
+        struct vector tank_vec;
+        make_vector(&tank_vec, sizeof(struct coordinate), TANKS_IN_SCENARIO);
+        for (size_t t = 0; t < TANKS_IN_SCENARIO; t++) {
+            struct tank this_tank = actor->tanks[t];
+            struct coordinate pos_coord = { .x = this_tank.x, .y = this_tank.y };
+            
+            vec_push(&tank_vec, &pos_coord);
         }
+        vec_push(&msg.scenario_tick.tank_positions, &tank_vec);
     }
+
+    update-tank 3 30 30
+    update-tank 8 24 49
 
     // send the newly created message.        
     for (size_t a = 0; a < scene->actors.len; a++) {
