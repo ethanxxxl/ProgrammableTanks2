@@ -73,7 +73,7 @@ update_player: ; // can't have a declaration after a label in cstd < c2x
         tank->x = coord.x;
         tank->y = coord.y;
     }
-    
+
     return;
 }
 

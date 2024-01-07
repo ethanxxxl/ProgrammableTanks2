@@ -110,9 +110,50 @@ validated to ensure that no nefarious activity is performed by the player.
 
      The server will resolve healing first, followed by movement, then firing.
 
-
 * Program Structure
-  
+** DONE File Structure
+   <2024-01-06 Sat>
+
+   as the program as grown more complex, I found the need to reorganize the file
+   structure, especially considering the abysmal state of ~client.c~. Below I
+   consider two options for how to structure the filesystem. I ended up going
+   with option 2.
+*** Option 1
+   keep all sources together. keep all includes together.
+   
+   - include/
+     + client-headers/
+     + server-headers/
+     + common-header-1
+     + common-header-2
+     + ...
+   - src/
+     + client-src/
+     + server-src/
+     + common-src-1
+     + common-src-2
+
+*** Option 2
+    separate out the binaries, but keep the translation units common
+    to both in a separate include.
+   
+    - include/
+      + common-header-1
+      + common-header-2
+    - src/
+      + common-src-1
+      + common-src-2
+       
+    - client/
+      + include/
+      + src/
+    - server/
+      + include/
+      + src/
+
+    really what you are doing here is just creating multiple binaries and a
+    couple libraries. I like option 2 better.
+    
 ** Connection Manager
    Initial layer, where incoming connections and data packets are recieved and
    deserialized. Once the deserialization and post processing is done, the
@@ -152,135 +193,134 @@ sufficient to simply provide a name, there is no security.*
     The player has been authenticated and can view all the scenarios which are
     currently active, join a scenario, or create a new scenario.
 
-    
 *** STATE_SCENARIO
     After creating or joining a scenario, the player can do normal gameplay
     things. 
 
 ** Client Connection Request
-for now, clients will self-identify, and no authentication will be done. In the
-future, there should be some sort of traffic encryption and authentication to
-protect OPSEC for individual players.
+   for now, clients will self-identify, and no authentication will be done. In the
+   future, there should be some sort of traffic encryption and authentication to
+   protect OPSEC for individual players.
 
 ** Client Map Request
-client requests map data from the server. The server will provide all map
-information. Future iterations of the sim may limit the amount of the map that
-is revealed; visible portions may be limited by the player's area of control.
+   client requests map data from the server. The server will provide all map
+   information. Future iterations of the sim may limit the amount of the map that
+   is revealed; visible portions may be limited by the player's area of control.
 
-for now, the server will provide a *complete listing of game object locations*.
+   for now, the server will provide a *complete listing of game object locations*.
 
 ** Client Update Request
-the client will update parameters on specific game objects.
+   the client will update parameters on specific game objects.
 
 ** Server Validation Response
-The server sends this message in response to a position update request. This
-response indicates whether the proposed update was accepted.
+   The server sends this message in response to a position update request. This
+   response indicates whether the proposed update was accepted.
 
-The server should enumerate which game object updates were valid and which ones
-were invalid.
+   The server should enumerate which game object updates were valid and which ones
+   were invalid.
 
 ** Message Structure
-I need to be able to receive and send messages. I have a bunch of message types.
+   I need to be able to receive and send messages. I have a bunch of message types.
 
-What you have going on currently?
-you have three functions:
-- send_message
-- recv_message
-- message_length
+   What you have going on currently?
+   you have three functions:
+   - send_message
+   - recv_message
+   - message_length
 
-#+begin_src c
-/// place to remember to update
-enum message_type {
-    ...
-};
+   #+begin_src c
+     /// place to remember to update
+     enum message_type {
+         ...
+     };
 
-struct message {
-    enum message_type type;
-    union msg_data { ... };
-};
+     struct message {
+         enum message_type type;
+         union msg_data { ... };
+     };
 
-/// place to remember to update
-int message_len(struct message* msg) {
-    switch (msg->type) {
+     /// place to remember to update
+     int message_len(struct message* msg) {
+         switch (msg->type) {
 
-    }
-}
+         }
+     }
 
-/// place to remember to update
-void send_message(enum message_type* msg) {
-    switch (msg->type) {
-        ...
-    }
-}
+     /// place to remember to update
+     void send_message(enum message_type* msg) {
+         switch (msg->type) {
+             ...
+                 }
+     }
 
-/// place to remember to update
-void rcv_message(struct message* msg) {
-    switch (msg->type) {
-        ...
-    }
-}
+     /// place to remember to update
+     void rcv_message(struct message* msg) {
+         switch (msg->type) {
+             ...
+                 }
+     }
 
-/// place to remember to update
-void free_message(struct message* msg) {
-    switch (msg->type) {
-        ...
-    }
-}
-#+end_src
+     /// place to remember to update
+     void free_message(struct message* msg) {
+         switch (msg->type) {
+             ...
+                 }
+     }
+   #+end_src
 
-With this setup, there are 5 places I have to remember to update every time I
-want to add a message. This is too much, and I have already been bitten in the
-butt because of it. There needs to be a more consolidated way to add new
-messages.
+   With this setup, there are 5 places I have to remember to update every time I
+   want to add a message. This is too much, and I have already been bitten in the
+   butt because of it. There needs to be a more consolidated way to add new
+   messages.
 
-This style is also confusing because it is not certain which union fields go
-with which message types, especially since not all message types are even
-associated with a union field.
+   This style is also confusing because it is not certain which union fields go
+   with which message types, especially since not all message types are even
+   associated with a union field.
 
-#+begin_src c
-// place to update for a new message
-enum message_type {
-    ...
-};
+   #+begin_src c
+     // place to update for a new message
+     enum message_type {
+         ...
+     };
 
-struct message {
-    enum message_type type;
+     struct message {
+         enum message_type type;
 
-    void* body; // this would be cast to the correct data structure and would
-                // have to be dynamically allocated, if an allocation is
-                // necessary.
-};
+         void* body; // this would be cast to the correct data structure and would
+                     // have to be dynamically allocated, if an allocation is
+                     // necessary.
+     };
 
-// place to update for a new message
-struct {
-    void (*encode_message)(void);
-    void (*decode_message)(void);
-    void (*free_message)(void);
-} g_messages[] = {
-    [MSG1] = { ...; ...; ...; },
-    [MSG2] = { ...; ...; ...; }
-};
-#+end_src
+     // place to update for a new message
+     struct {
+         void (*encode_message)(void);
+         void (*decode_message)(void);
+         void (*free_message)(void);
+     } g_messages[] = {
+         [MSG1] = { ...; ...; ...; },
+         [MSG2] = { ...; ...; ...; }
+     };
+   #+end_src
 
-With the setup above, there are only two places where a message. without
-considering the functions that need to be written for the new message. This
-would be superior to the other system since it is more consolidated, and there
-is less room for error.
+   With the setup above, there are only two places where a message. without
+   considering the functions that need to be written for the new message. This
+   would be superior to the other system since it is more consolidated, and there
+   is less room for error.
 
-One downside to this is that you have a void pointer in the message structure,
-which makes it a bit less ergonomic.
+   One downside to this is that you have a void pointer in the message structure,
+   which makes it a bit less ergonomic.
 
-Here is the thing, some messages will have data that will not be known at
-compile time. You will need to have dynamicallly allocated memory for these
-messages. Essentially anything that transmits a string falls into this category.
+   Here is the thing, some messages will have data that will not be known at
+   compile time. You will need to have dynamicallly allocated memory for these
+   messages. Essentially anything that transmits a string falls into this category.
 
-you don't want to have body be cast to things such as vectors, since that would
-essentially mean doing two mallocs just for a single piece of data.
+   you don't want to have body be cast to things such as vectors, since that would
+   essentially mean doing two mallocs just for a single piece of data.
 
-when you receive data, it will be put into an expanding buffer. that data is
-then decoded into a message. for now, lets just keep doing it how you were, and
-malloc more than probably necessary. If if becomes a problem in the future, then
-we can fix it then.
+   when you receive data, it will be put into an expanding buffer. that data is
+   then decoded into a message. for now, lets just keep doing it how you were, and
+   malloc more than probably necessary. If if becomes a problem in the future, then
+   we can fix it then.
 
-The encode message function should return a vector that contains the encoded
-body of the message
+   The encode message function should return a vector that contains the encoded
+   body of the message

@@ -217,9 +217,6 @@ int scenario_handler(struct scenario *scene) {
         vec_push(&msg.scenario_tick.tank_positions, &tank_vec);
     }
 
-    update-tank 3 30 30
-    update-tank 8 24 49
-
     // send the newly created message.        
     for (size_t a = 0; a < scene->actors.len; a++) {
         struct actor actor;

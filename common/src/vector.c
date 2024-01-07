@@ -17,7 +17,6 @@ int make_vector(struct vector *vec, size_t elem_len, size_t size_hint) {
         return -1;
     }
 
-
     vec->element_len = elem_len;
     vec->len = 0;
 
@@ -106,6 +105,9 @@ int vec_rem(struct vector *vec, size_t n) {
 }
 
 int vec_at(const struct vector *vec, size_t n, void *dst) {
+    if (n >= vec->len)
+        return -1;
+    
     memcpy(dst,
            vec_ref(vec, n),
            vec->element_len);
@@ -114,6 +116,9 @@ int vec_at(const struct vector *vec, size_t n, void *dst) {
 }
 
 void* vec_ref(const struct vector *vec, size_t n) {
+    if (n >= vec->len)
+        return NULL;
+    
     return (uint8_t*)(vec->data) + (vec->element_len * n);
 }
 
