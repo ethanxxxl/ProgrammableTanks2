@@ -19,33 +19,40 @@ SRC_SERVER = main.c scenario.c player_manager.c
 CLIENT_DIR = client/src
 SRC_CLIENT = client.c
 
+# unit tests will work differently, each unit will have a main function.
+TESTER_DIR = unit-tests
+SRC_TESTER = vector-test.c message-test.c
+
+# mains included here to filter out when running tests.
+MAINS = $(CLIENT_DIR)/client.c $(SERVER_DIR)/main.c
+OBJ_MAINS = $(patsubst %.c,$(BUILDDIR)/%.o,$(MAINS))
+
 # mirror the program directory structure in the build directory.
 OBJ_COMMON = $(patsubst %.c,$(BUILDDIR)/$(COMMON_DIR)/%.o,$(SRC_COMMON))
 OBJ_SERVER = $(patsubst %.c,$(BUILDDIR)/$(SERVER_DIR)/%.o,$(SRC_SERVER))
 OBJ_CLIENT = $(patsubst %.c,$(BUILDDIR)/$(CLIENT_DIR)/%.o,$(SRC_CLIENT))
+OBJ_TESTER = $(patsubst %.c,$(BUILDDIR)/$(TESTER_DIR)/%.o,$(SRC_TESTER))
 
-OBJ = $(OBJ_COMMON) $(OBJ_SERVER) $(OBJ_CLIENT)
+OBJ = $(OBJ_COMMON) $(OBJ_SERVER) $(OBJ_CLIENT) $(OBJ_TESTER)
 
-COMMON_INC = -Icommon/include
-CLIENT_INC = $(COMMON_INC) -Iclient/include
-SERVER_INC = $(COMMON_INC) -Iserver/include
-LIB_CLIENT = -lSDL2 -lm -pthread
-LIB_SERVER = -pthread -lm
+INC = -Icommon/include -Iclient/include -Iserver/include
+LIB = -lSDL2 -lm -pthread
 
 SERVER_BIN = $(BUILDDIR)/server-app
 CLIENT_BIN = $(BUILDDIR)/client-app
+UNIT_TESTS = $(patsubst %.c,$(BUILDDIR)/$(TESTER_DIR)/%,$(SRC_TESTER))
 
-.PHONY: clean
+.PHONY: clean test
 
-all: $(SERVER_BIN) $(CLIENT_BIN)
+all: $(SERVER_BIN) $(CLIENT_BIN) $(TESTS)
 
 $(SERVER_BIN): $(OBJ_SERVER) $(OBJ_COMMON)
 	@echo -e "\033[1;33mbuilding executable: \033[1m$@\033[0m\033[0m"
-	@$(CC) $(CFLAGS) $(LIB_SERVER) $(SERVER_INC) -o $@ $(OBJ_SERVER) $(OBJ_COMMON)
+	@$(CC) $(CFLAGS) $(LIB) $(INC) -o $@ $(OBJ_SERVER) $(OBJ_COMMON)
 
 $(CLIENT_BIN): $(OBJ_CLIENT) $(OBJ_COMMON)
 	@echo -e "\033[1;33mbuilding executable: \033[1m$@\033[0m\033[0m"
-	@$(CC) $(CFLAGS) $(LIB_CLIENT) $(CLIENT_INC) -o $@ $(OBJ_CLIENT) $(OBJ_COMMON)
+	@$(CC) $(CFLAGS) $(LIB) $(INC) -o $@ $(OBJ_CLIENT) $(OBJ_COMMON)
 
 # Static substitution. The filestructure of the source code is mirrored in the
 # build directory. This allows us to derive the .c file paths from the .o file
@@ -53,7 +60,21 @@ $(CLIENT_BIN): $(OBJ_CLIENT) $(OBJ_COMMON)
 $(OBJ): $(BUILDDIR)/%.o : %.c
 	@mkdir -p $(@D)
 	@echo -e "\033[32mcompiling \033[1m$<\033[0m\033[0m"
-	@$(CC) $(CFLAGS) $(COMMON_INC) $(CLIENT_INC) $(SERVER_INC) -c $< -o $@
+	@$(CC) $(CFLAGS) $(INC) -c $< -o $@
+
+test: $(UNIT_TESTS)
+	@echo -e "\n\033[1m---RUNNING TESTS---\033[0m\n"
+	@$(patsubst %,./%;,$(UNIT_TESTS))
+	@echo -e "\n\033[1m---TESTS FINISHED---\033[0m"
+
+# compile tests. since each test has its own main function, all but the target
+# main must be filtered out in the recipe.
+#
+# for the prerequisites, we filter out the mains from the other normal targets.
+$(UNIT_TESTS): $(filter-out $(OBJ_MAINS),$(OBJ))
+	@echo -e "\033[1;33mcompling test \033[1m$@\033[0m\033[0m"
+	@$(CC) $(CFLAGS) $(LIB) $(INC) -o $@ \
+		$@.o $(filter-out $(OBJ_TESTER) $(OBJ_MAINS),$(OBJ))
 
 clean:
 	rm -rf $(BUILDDIR)
