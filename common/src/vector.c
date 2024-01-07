@@ -53,7 +53,9 @@ int vec_reserve(struct vector *vec, size_t n) {
 }
 
 int vec_push(struct vector *vec, const void *src) {
-    vec_reserve(vec, vec->len+1);
+    int status = vec_reserve(vec, vec->len+1);
+    if (status != 0)
+        return status;
     
     memcpy(vec_ref(vec, vec->len),
            src, vec->element_len);
@@ -64,20 +66,28 @@ int vec_push(struct vector *vec, const void *src) {
 }
 
 int vec_pushn(struct vector *vec, const void *src, size_t n) {
-    vec_reserve(vec, vec->len+n);
-
+    int status = vec_reserve(vec, vec->len+n);
+    if (status != 0)
+        return status;
+   
     memcpy(vec_ref(vec, vec->len), src, n * vec->element_len);
     vec->len += n;
     return 0;
 }
 
 int vec_resize(struct vector *vec, size_t n) {
-    vec_reserve(vec, n);
+    int status = vec_reserve(vec, n);
+    if (status != 0)
+        return status;
+    
     vec->len = n;
     return 0;
 }
 
 int vec_pop(struct vector *vec, void *dst) {
+    if (vec->len == 0)
+        return -1;
+    
     if (dst != NULL)
         memcpy(dst, vec_ref(vec, vec->len), vec->element_len);
 
@@ -105,9 +115,9 @@ int vec_rem(struct vector *vec, size_t n) {
 }
 
 int vec_at(const struct vector *vec, size_t n, void *dst) {
-    if (n >= vec->len)
+    if (n >= vec->len || dst == NULL)
         return -1;
-    
+        
     memcpy(dst,
            vec_ref(vec, n),
            vec->element_len);
@@ -122,7 +132,10 @@ void* vec_ref(const struct vector *vec, size_t n) {
     return (uint8_t*)(vec->data) + (vec->element_len * n);
 }
 
-int vec_set(const struct vector *vec, size_t n, void* src) {
+int vec_set(struct vector *vec, size_t n, const void *src) {
+    if (n <= vec->len || src == NULL)
+        return -1;
+    
     memcpy(vec_ref(vec, n),
            src,
            vec->element_len);
