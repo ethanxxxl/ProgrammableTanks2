@@ -170,6 +170,11 @@ int vec_at(const struct vector *vec, size_t n, void *dst);
  * when using this function. If the capacity of the vector is changed, this
  * pointer will be INVALID.
  *
+ * this function will return a reference for any elements address that is within
+ * the capacity of the vector. You can get a reference for uninitializecd
+ * elements if you desire. However, this function will not grant references to
+ * memory that hasn't been reserved.
+ *
  * @param[in,out] vec the vector to obtain a reference too.
  * @param[in] n the index of interest.
  *

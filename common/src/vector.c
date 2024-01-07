@@ -126,8 +126,10 @@ int vec_at(const struct vector *vec, size_t n, void *dst) {
 }
 
 void* vec_ref(const struct vector *vec, size_t n) {
-    if (n >= vec->len)
+    if (n >= vec->capacity) {
+        printf("WARNING! VEC_REF RETURNING NULL DUE TO OUT OF BOUNDS N\n");
         return NULL;
+    }
     
     return (uint8_t*)(vec->data) + (vec->element_len * n);
 }
