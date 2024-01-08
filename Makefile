@@ -57,13 +57,14 @@ $(CLIENT_BIN): $(OBJ_CLIENT) $(OBJ_COMMON)
 # Static substitution. The filestructure of the source code is mirrored in the
 # build directory. This allows us to derive the .c file paths from the .o file
 # paths.
-$(OBJ): $(BUILDDIR)/%.o : %.c
+$(OBJ): $(BUILDDIR)/%.o : %.c \
+			  $(TESTER_DIR)/unit-test.h # unit-test header-only lib
 	@mkdir -p $(@D)
 	@echo -e "\033[32mcompiling \033[1m$<\033[0m\033[0m"
 	@$(CC) $(CFLAGS) $(INC) -c $< -o $@
 
 test: $(UNIT_TESTS)
-	@echo -e "\n\033[1m---RUNNING TESTS---\033[0m\n"
+	@echo -e "\033[1m---RUNNING TESTS---\033[0m\n"
 	@$(patsubst %,./%;,$(UNIT_TESTS))
 	@echo -e "\n\033[1m---TESTS FINISHED---\033[0m"
 
@@ -72,7 +73,7 @@ test: $(UNIT_TESTS)
 #
 # for the prerequisites, we filter out the mains from the other normal targets.
 $(UNIT_TESTS): $(filter-out $(OBJ_MAINS),$(OBJ))
-	@echo -e "\033[1;33mcompling test \033[1m$@\033[0m\033[0m"
+	@echo -e "\033[33mcompling test \033[1m$@\033[0m\033[0m"
 	@$(CC) $(CFLAGS) $(LIB) $(INC) -o $@ \
 		$@.o $(filter-out $(OBJ_TESTER) $(OBJ_MAINS),$(OBJ))
 
