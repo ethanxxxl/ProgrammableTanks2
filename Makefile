@@ -47,11 +47,11 @@ UNIT_TESTS = $(patsubst %.c,$(BUILDDIR)/$(TESTER_DIR)/%,$(SRC_TESTER))
 all: $(SERVER_BIN) $(CLIENT_BIN) $(TESTS)
 
 $(SERVER_BIN): $(OBJ_SERVER) $(OBJ_COMMON)
-	@echo -e "\033[1;33mbuilding executable: \033[1m$@\033[0m\033[0m"
+	@echo -e "\033[0;33mbuilding executable: \033[1m$@\033[0m\033[0m"
 	@$(CC) $(CFLAGS) $(LIB) $(INC) -o $@ $(OBJ_SERVER) $(OBJ_COMMON)
 
 $(CLIENT_BIN): $(OBJ_CLIENT) $(OBJ_COMMON)
-	@echo -e "\033[1;33mbuilding executable: \033[1m$@\033[0m\033[0m"
+	@echo -e "\033[0;33mbuilding executable: \033[1m$@\033[0m\033[0m"
 	@$(CC) $(CFLAGS) $(LIB) $(INC) -o $@ $(OBJ_CLIENT) $(OBJ_COMMON)
 
 # Static substitution. The filestructure of the source code is mirrored in the
