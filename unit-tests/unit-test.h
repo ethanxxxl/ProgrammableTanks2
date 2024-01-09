@@ -154,7 +154,6 @@ void run_test_suite(const struct test tests[], size_t num_tests,
                (int)c_column_size, tests[i].name, cell_padding, "",
                (int)r_column_size, result_str, right_padding, "",
                CODE_CLEAR);
-        printf("\033[0G"); // go back to beginning of line.
         fflush(stdout);       
 
         // don't call null functions. They fail the test.
@@ -171,6 +170,7 @@ void run_test_suite(const struct test tests[], size_t num_tests,
                 vec_push(&errors, &failed_test);
         }
         
+        printf("\033[0G"); // go back to beginning of line.
         printf("%s%*s%s"   // line_bg, left_padding, CODE_ITALIC,
                "%*zu%*s%s" // test index, cell padding, CODE_ITALIC_CLR,
                "%-*s%*s"   // test name, cell padding,
