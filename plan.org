@@ -1,37 +1,37 @@
 #+TITLE: Programable Tanks 2
 
 * Overview
-this is my second attempt to create a game/simulation of AI tank combat.
+  this is my second attempt to create a game/simulation of AI tank combat.
 
-in my last attempt, I was bogged down with creating a graphics frontend first
-and then attaching the logic to the backend. I never really got around to
-implementing the logic because of this.
+  in my last attempt, I was bogged down with creating a graphics frontend first
+  and then attaching the logic to the backend. I never really got around to
+  implementing the logic because of this.
 
-With this project, I will start with creating the game logic/backend first, then
-add the graphics front end. To visualize what is going on, I will certainly
-implement a simple TUI.
+  With this project, I will start with creating the game logic/backend first,
+  then add the graphics front end. To visualize what is going on, I will
+  certainly implement a simple TUI.
 
 * Core Constructs
-To start, the scope of these core concepts will be constrained. The mechanics
-will be similar to the online MMO Screeps.
+  To start, the scope of these core concepts will be constrained. The mechanics
+  will be similar to the online MMO Screeps.
 
 ** Tanks
-can have different attributes which give it abilities.
-- Movement
-- Attack
-- Cargo
-- Sensor Packages
+   can have different attributes which give it abilities.
+   - Movement
+   - Attack
+   - Cargo
+   - Sensor Packages
 
 ** World
-   A map of the world does not necessarily need to be maintained. However, a list
-of world objects will need to be maintained.
+   A map of the world does not necessarily need to be maintained. However, a
+   list of world objects will need to be maintained.
 
-position updates and actions will need to be validated to ensure there are no
-conflicts or intersections.
+   position updates and actions will need to be validated to ensure there are no
+   conflicts or intersections.
 
 ** Threading
-This program will be multithreaded. Threads may be used to send commands, run
-callbacks, etc.
+   This program will be multithreaded. Threads may be used to send commands, run
+   callbacks, etc.
 
 *** World Update Thread
 every game tick, all world object positions will be updated.
@@ -155,8 +155,8 @@ validated to ensure that no nefarious activity is performed by the player.
     couple libraries. I like option 2 better.
     
 ** Connection Manager
-   Initial layer, where incoming connections and data packets are recieved and
-   deserialized. Once the deserialization and post processing is done, the
+   Initial layer, where incoming connections and data packets are received and
+   deserialized. Once the deserialization and post-processing is done, the
    resulting data is sent to the client manager layer.
 
 ** Player Client Manager
@@ -170,17 +170,17 @@ validated to ensure that no nefarious activity is performed by the player.
    where tank positions will be updated or scheduled.
     
 * Networking API
-This is meant to be a multiplayer game/simulation. While all player operations
-will be validated by the server, the processing required to determine those
-moves must be done by the clients.
+  This is meant to be a multiplayer game/simulation. While all player operations
+  will be validated by the server, the processing required to determine those
+  moves must be done by the clients.
 
-The messages that may be sent over the network to exchange information are
-described in this section.
+  The messages that may be sent over the network to exchange information are
+  described in this section.
 
-Every client connected to the server will have its state tracked. When a network
-connection is made to the server, it must first authenticate itself as a
-particular user before any other messages will be accepted. *for now, it is
-sufficient to simply provide a name, there is no security.* 
+  Every client connected to the server will have its state tracked. When a
+  network connection is made to the server, it must first authenticate itself as
+  a particular user before any other messages will be accepted. *for now, it is
+  sufficient to simply provide a name, there is no security.*
 
 ** Connection State Diagram
 *** STATE_IDLE
@@ -197,27 +197,29 @@ sufficient to simply provide a name, there is no security.*
     After creating or joining a scenario, the player can do normal gameplay
     things. 
 
-** Client Connection Request
-   for now, clients will self-identify, and no authentication will be done. In the
-   future, there should be some sort of traffic encryption and authentication to
-   protect OPSEC for individual players.
+** DONE Client Connection Request
+   for now, clients will self-identify, and no authentication will be done. In
+   the future, there should be some sort of traffic encryption and
+   authentication to protect OPSEC for individual players.
 
-** Client Map Request
+** TODO Client Map Request
    client requests map data from the server. The server will provide all map
-   information. Future iterations of the sim may limit the amount of the map that
-   is revealed; visible portions may be limited by the player's area of control.
+   information. Future iterations of the sim may limit the amount of the map
+   that is revealed; visible portions may be limited by the player's area of
+   control.
 
-   for now, the server will provide a *complete listing of game object locations*.
+   for now, the server will provide a *complete listing of game object
+   locations*.
 
-** Client Update Request
+** TODO Client Update Request
    the client will update parameters on specific game objects.
 
-** Server Validation Response
+** TODO Server Validation Response
    The server sends this message in response to a position update request. This
    response indicates whether the proposed update was accepted.
 
-   The server should enumerate which game object updates were valid and which ones
-   were invalid.
+   The server should enumerate which game object updates were valid and which
+   ones were invalid.
 
 ** Message Structure
    I need to be able to receive and send messages. I have a bunch of message types.
@@ -324,3 +326,43 @@ sufficient to simply provide a name, there is no security.*
 
    The encode message function should return a vector that contains the encoded
    body of the message
+
+
+* Feature List
+** TODO Multiple Scenarios
+   - [ ] The Server can create new scenarios
+   - [ ] The Server can remove scenarios.  Scenarios will not be removed if
+     there are players still in them.
+   - [ ] Users can ask the server to create new scenarios
+   - [ ] Users can join and leave any scenario
+
+** TODO Map Generation
+*** TODO Map File Format for Static Maps
+*** TODO Procedurally Generated Maps
+** TODO [#A] Algorithm Library for Tank Control
+   - [ ] path finding
+   - [ ] target finding
+   - [ ] squadron movement commands
+** TODO [#B] Foreign Function Interfaces
+   - [ ] Common Lisp
+   - [ ] Python
+   - [ ] Rust
+   - [ ] Node JS
+   - [ ] Go
+** TODO More Ergonomic Client
+*** TODO GUI Features
+    - [ ] buttons
+    - [ ] text
+    - [ ] proper interface with the rest of the program
+    - [ ] integrated console
+*** TODO Flags
+*** TODO Tank Listing
+*** TODO Help Command
+    Help by itself should list all the commands and a summary for each of them.
+    ~help COMMAND~ Will provide detailed information on each command.
+
+* Code Refactor List
+  You need to do something about the vector structure.  You use it everywhere
+  for a lot of things.  It is confusing what type is contained in a vector.
+  Maybe some typedefs may be helpful?
+  
