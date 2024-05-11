@@ -128,8 +128,7 @@ void run_test_suite(const struct test tests[], size_t num_tests,
            CODE_BOLD, (int)r_column_size, test_suite_name, CODE_BOLD_CLR,
            -right_padding, "]", CODE_CLEAR);
 
-    struct vector errors;
-    make_vector(&errors, sizeof(struct failed_test), 4);
+    struct vector* errors = make_vector(sizeof(struct failed_test), 4);
     
     // for each unit test, print out the name in the table without formatting.
     // then run the test. redraw the table row with the necessary highlighting.
@@ -167,7 +166,7 @@ void run_test_suite(const struct test tests[], size_t num_tests,
 
             struct failed_test failed_test = { (int)i, tests[i].name, result };
             if (result != NULL)
-                vec_push(&errors, &failed_test);
+                vec_push(errors, &failed_test);
         }
         
         printf("\033[0G"); // go back to beginning of line.
@@ -184,20 +183,20 @@ void run_test_suite(const struct test tests[], size_t num_tests,
     }
 
     // TODO format this nicely like you did above.
-    if (errors.len == 0)
+    if (vec_len(errors) == 0)
         printf("REPORT: all tests passsed!\n");
     else 
         printf("REPORT: %zu / %zu tests failed\n",
-               errors.len, num_tests);
+               vec_len(errors), num_tests);
 
-    for (size_t i = 0; i < errors.len; i++) {
+    for (size_t i = 0; i < vec_len(errors); i++) {
         struct failed_test test;
-        vec_at(&errors, i, &test);
+        vec_at(errors, i, &test);
         printf("[%d] %s: %s\n", test.num, test.name, test.error_message);
     }
 
     printf("\n");
 
-    free_vector(&errors);
+    free_vector(errors);
     return;
 }

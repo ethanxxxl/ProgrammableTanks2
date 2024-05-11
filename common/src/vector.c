@@ -4,7 +4,32 @@
 #include <vector.h>
 #include <stdint.h>
 
-int make_vector(struct vector *vec, size_t elem_len, size_t size_hint) {
+struct vector {
+    void* data; 
+    /**
+     * the size of individual elements in the vector.
+     */
+    size_t element_len;
+
+    /**
+     * the maximum number of elements that the vector can currently hold.
+     *
+     * If one wishes to add more elements, then realloc needs to be called to
+     * increase the capacity of the vector.
+     */
+    size_t capacity;
+
+    /**
+     * The number of elements currently stored in the vector.
+     */
+    size_t len;
+};
+
+struct vector* make_vector(size_t elem_len, size_t size_hint) {
+    struct vector* vec = malloc(sizeof(struct vector));
+    if (vec == NULL)
+        return NULL;
+
     if (size_hint > 0) {
         vec->data = malloc(elem_len * size_hint);
         vec->capacity = size_hint;
@@ -14,7 +39,8 @@ int make_vector(struct vector *vec, size_t elem_len, size_t size_hint) {
     }
 
     if (vec->data == NULL) {
-        return -1;
+        free(vec);
+        return NULL;
     }
 
     vec->element_len = elem_len;
@@ -23,16 +49,32 @@ int make_vector(struct vector *vec, size_t elem_len, size_t size_hint) {
     // initialize newly allocated memory
     memset(vec->data, 0, vec->element_len * vec->capacity);
 
-    return 0;
+    return vec;
 }
 
-int free_vector(struct vector *vec) {
+void free_vector(struct vector* vec) {
     free(vec->data);
     vec->data = NULL;
-    return 0;
+    free(vec);
 }
 
-int vec_reserve(struct vector *vec, size_t n) {
+void* vec_dat(struct vector* vec) {
+    return vec->data;
+}
+
+size_t vec_len(const struct vector* vec) {
+    return vec->len;
+}
+
+size_t vec_cap(const struct vector* vec) {
+    return vec->capacity;
+}
+
+size_t vec_element_len(const struct vector* vec) {
+    return vec->element_len;
+}
+
+int vec_reserve(struct vector* vec, size_t n) {
     if (vec->capacity > n)
         return 0;
 
@@ -52,7 +94,7 @@ int vec_reserve(struct vector *vec, size_t n) {
     return 0;
 }
 
-int vec_push(struct vector *vec, const void *src) {
+int vec_push(struct vector* vec, const void* src) {
     if (src == NULL)
         return -1;
     
@@ -68,7 +110,7 @@ int vec_push(struct vector *vec, const void *src) {
     return 0;
 }
 
-int vec_pushn(struct vector *vec, const void *src, size_t n) {
+int vec_pushn(struct vector* vec, const void* src, size_t n) {
     if (src == NULL)
         return -1;
     
@@ -81,7 +123,7 @@ int vec_pushn(struct vector *vec, const void *src, size_t n) {
     return 0;
 }
 
-int vec_resize(struct vector *vec, size_t n) {
+int vec_resize(struct vector* vec, size_t n) {
     int status = vec_reserve(vec, n);
     if (status != 0)
         return status;
@@ -90,7 +132,7 @@ int vec_resize(struct vector *vec, size_t n) {
     return 0;
 }
 
-int vec_pop(struct vector *vec, void *dst) {
+int vec_pop(struct vector* vec, void* dst) {
     if (vec->len == 0)
         return -1;
     
@@ -102,7 +144,7 @@ int vec_pop(struct vector *vec, void *dst) {
     return 0;
 }
 
-int vec_rem(struct vector *vec, size_t n) {
+int vec_rem(struct vector* vec, size_t n) {
     if (n >= vec->len)
         return -1;
 
@@ -120,7 +162,7 @@ int vec_rem(struct vector *vec, size_t n) {
     return 0;
 }
 
-int vec_at(const struct vector *vec, size_t n, void *dst) {
+int vec_at(const struct vector* vec, size_t n, void* dst) {
     if (n >= vec->len || dst == NULL)
         return -1;
         
@@ -131,7 +173,7 @@ int vec_at(const struct vector *vec, size_t n, void *dst) {
     return 0;
 }
 
-void* vec_ref(const struct vector *vec, size_t n) {
+void* vec_ref(const struct vector* vec, size_t n) {
     if (n >= vec->capacity) {
         printf("WARNING! VEC_REF RETURNING NULL DUE TO OUT OF BOUNDS N\n");
         return NULL;
@@ -140,7 +182,16 @@ void* vec_ref(const struct vector *vec, size_t n) {
     return (uint8_t*)(vec->data) + (vec->element_len * n);
 }
 
-int vec_set(struct vector *vec, size_t n, const void *src) {
+void* vec_byte_ref(const struct vector* vec, size_t offset) {
+    if (offset >= vec->capacity * vec->element_len) {
+        printf("WARNING! VEC_BYTE_REF RETURNING NULL DUE TO OUT OF BOUNDS N\n");
+        return NULL;
+    }
+
+    return (uint8_t*)(vec->data) + offset;
+}
+
+int vec_set(struct vector* vec, size_t n, const void* src) {
     if (n >= vec->len || src == NULL)
         return -1;
     
@@ -148,5 +199,13 @@ int vec_set(struct vector *vec, size_t n, const void *src) {
            src,
            vec->element_len);
     
+    return 0;
+}
+
+int vec_concat(struct vector* vec, const struct vector* src) {
+    if (vec == NULL || src == NULL)
+        return -1;
+
+    vec_pushn(vec, src->data, src->len);
     return 0;
 }

@@ -19,7 +19,7 @@ extern struct scenario g_scenario;
 
 struct {
     struct player_manager* client;
-    struct vector msg_buf;
+    struct vector* msg_buf;
 } g_connections[50];
 
 int g_connections_len;
@@ -78,8 +78,7 @@ void *accept_connections_thread(void* port_num) {
         // FIXME: allocated memory never freed!
         printf("recieved a new connection!\n");
         g_connections[g_connections_len].client = new_player;
-        make_vector(&g_connections[g_connections_len].msg_buf,
-                    sizeof(char), 10);
+        g_connections[g_connections_len].msg_buf = make_vector(sizeof(char), 10);
         g_connections_len += 1;
     }
 
@@ -95,7 +94,7 @@ void *accept_connections_thread(void* port_num) {
 /// top level client handling function that recieves all messages from the
 /// clients, and passes them to the appropriate handler (depends on the state of
 /// the client)
-void handle_client(struct player_manager* p, struct vector *msg_buf) {
+void handle_client(struct player_manager* p, struct vector* msg_buf) {
     struct message msg;
     int status = message_recv(p->socket, &msg, msg_buf);
     
@@ -124,9 +123,9 @@ void handle_client(struct player_manager* p, struct vector *msg_buf) {
     }
     
     if (msg.type == MSG_REQUEST_DEBUG) {
-        printf("%s: %s\n", p->username, (char*)msg.text.data);
+        printf("%s: %s\n", p->username, (char*)vec_dat(msg.text));
         
-        if (strcmp((char*)msg.text.data, "kill-serv") == 0) {
+        if (strcmp((char*)vec_dat(msg.text), "kill-serv") == 0) {
             g_run = false;
         }
     }
@@ -143,7 +142,7 @@ void* client_request_thread(void *arg) {
         // you will handle stuff here, like printing debug messages!
         for (int i = 0; i < g_connections_len; i++) {
             handle_client(g_connections[i].client,
-                   &g_connections[i].msg_buf);
+                          g_connections[i].msg_buf);
         }
 
         /* TEMPORARY (probably) SCENE HANDLING */

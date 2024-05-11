@@ -11,36 +11,7 @@
  * kept track of by the `len` parameter. The functions that operate on vectors
  * will automatically reallocate data to fit new elements.
  */
-struct vector {
-
-    /**
-     * points to the beginning of the block of memory allocated for the vector.
-     *
-     * This address may change as the size/capacity of the vector changes. For
-     * this reason, one must take care to not use functions which may call
-     * realloc (`push` `pushn` `resize`, etc). Anytime the vector needs more
-     * space, any existing copies of `data` are made invalid!
-     */
-    void *data;
-
-    /**
-     * the size of individual elements in the vector.
-     */
-    size_t element_len;
-
-    /**
-     * the maximum number of elements that the vector can currently hold.
-     *
-     * If one wishes to add more elements, then realloc needs to be called to
-     * increase the capacity of the vector.
-     */
-    size_t capacity;
-
-    /**
-     * The number of elements currently stored in the vector.
-     */
-    size_t len;
-};
+struct vector;
 
 /**
  * initialize a new vector.
@@ -51,9 +22,9 @@ struct vector {
  * this parameter is zero, the "default" value of 10 will be used. Otherwise,
  * this parameter can be used to minimize the amount of calls to `vec_reserve`.
  *
- * @return 0 on success, -1 on failure.
+ * @return NULL if failed to allocate space, a pointer to the vector otherwise.
  */
-int make_vector(struct vector *vec, size_t elem_len, size_t size_hint);
+struct vector* make_vector(size_t elem_len, size_t size_hint);
 
 /**
  * frees the resources used by vector.
@@ -62,10 +33,13 @@ int make_vector(struct vector *vec, size_t elem_len, size_t size_hint);
  * function should be used once the vector has 'gone out of scope'.
  *
  * @param[in] vec the vector that will be freed.
- *
- * @return 0 on success, -1 on failure.
  */
-int free_vector(struct vector *vec);
+void free_vector(struct vector* vec);
+
+void* vec_dat(struct vector* vec);
+size_t vec_len(const struct vector* vec);
+size_t vec_cap(const struct vector* vec);
+size_t vec_element_len(const struct vector* vec);
 
 /**
  * requests that the vector be large enough to fit *at least* n elements.
@@ -80,7 +54,7 @@ int free_vector(struct vector *vec);
  *
  * @return 0 if the allocation was successful, -1 on failure.
  */
-int vec_reserve(struct vector *vec, size_t n);
+int vec_reserve(struct vector* vec, size_t n);
 
 /**
  * push an element to the end of a vector.
@@ -94,7 +68,7 @@ int vec_reserve(struct vector *vec, size_t n);
  * @return 0 if the element was pushed successfully, -1 if there was an
  * unsuccessful reserve/allocation.
  */
-int vec_push(struct vector *vec, const void *src);
+int vec_push(struct vector* vec, const void* src);
 
 /**
  * push `n` contiguous elements of `src` into the vector.
@@ -110,7 +84,7 @@ int vec_push(struct vector *vec, const void *src);
  * @return 0 if all the elements were successfully appended, -1 if there was an
  * allocation error, and the function failed. 
  */
-int vec_pushn(struct vector *vec, const void *src, size_t n);
+int vec_pushn(struct vector* vec, const void* src, size_t n);
 
 /**
  * makes the vector exactly `n` elements in length, padding/truncating as
@@ -122,7 +96,7 @@ int vec_pushn(struct vector *vec, const void *src, size_t n);
  * @return 0 if the operation was successful. -1 if there is an allocation
  * failure.
  */
-int vec_resize(struct vector *vec, size_t n);
+int vec_resize(struct vector* vec, size_t n);
 
 /**
  * remove the last element from the vector, and copy it into `dst`.
@@ -136,7 +110,7 @@ int vec_resize(struct vector *vec, size_t n);
  *
  * @return 0 on success, -1 if length was zero and nothing was copied.
  */
-int vec_pop(struct vector *vec, void *dst);
+int vec_pop(struct vector* vec, void* dst);
 
 /**
  * removes the element at indext `n`, shifting subsequent elements left.
@@ -147,7 +121,7 @@ int vec_pop(struct vector *vec, void *dst);
  * @return 0 on success, -1 if the element wasn't in bounds, and no elements
  * were removed.
  */
-int vec_rem(struct vector *vec, size_t n);
+int vec_rem(struct vector* vec, size_t n);
 
 /**
  * copies the element at index `n` into `dst`.
@@ -160,7 +134,7 @@ int vec_rem(struct vector *vec, size_t n);
  * @return if n is out of bounds or `src` is NULL, returns -1. zero is returned
  * otherwise.
  */
-int vec_at(const struct vector *vec, size_t n, void *dst);
+int vec_at(const struct vector* vec, size_t n, void* dst);
 
 /**
  * Indexes index `n` of the vector, returning a reference (pointer).
@@ -180,7 +154,11 @@ int vec_at(const struct vector *vec, size_t n, void *dst);
  *
  * @return A pointer to index `n` in the vector, or NULL if n is out of bounds.
  */
-void* vec_ref(const struct vector *vec, size_t n);
+void* vec_ref(const struct vector* vec, size_t n);
+
+/**
+ * similar to `vec_ref` but with a byte offset rather than an index.*/
+void* vec_byte_ref(const struct vector* vec, size_t offset);
 
 /**
  * sets element `n` to the value at `src` by copying the value into the vector.
@@ -191,5 +169,17 @@ void* vec_ref(const struct vector *vec, size_t n);
  *
  * @return 0 on success, -1 if `n` is out of bounds or `src` is NULL.
 */
-int vec_set(struct vector *vec, size_t n, const void *src);
+int vec_set(struct vector* vec, size_t n, const void* src);
+
+/**
+ * pushes the contents of `src` onto `vec`
+ */
+int vec_concat(struct vector* vec, const struct vector* src);
+
+/**
+ * copies `size` bytes starting at the byte index `offset` to `dst`.  The actual
+ * element length is not used in this function.  This may be useful for casting
+ * operations.*/
+int vec_bytes(const struct vector* vec, size_t offset, size_t size, void* dst);
+
 #endif

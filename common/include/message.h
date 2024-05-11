@@ -64,7 +64,7 @@ void text_free(struct message*);
  * This is how users are admitted into the server and authenticated.
  * */
 struct user_credentials {
-    struct vector username;
+    struct vector* username;
 };
 void user_credentials_ser(const struct message* msg, struct vector* dat);
 void user_credentials_des(struct message* msg, const struct vector* dat);
@@ -84,9 +84,9 @@ struct coordinate {
 };
 
 struct player_update {
-    struct vector tank_position_coords;
-    struct vector tank_target_coords;
-    struct vector tank_instructions;
+    struct vector* tank_position_coords;
+    struct vector* tank_target_coords;
+    struct vector* tank_instructions;
 };
 void player_update_ser(const struct message *msg, struct vector *dat);
 void player_update_des(struct message *msg, const struct vector *dat);
@@ -112,9 +112,9 @@ void player_update_free(struct message *msg);
  *       consider optimizing this message for space.
  */
 struct scenario_tick {
-    struct vector username_vecs;
-    // TODO: struct vector user_tasks ??
-    struct vector tank_positions;
+    struct vector* username_vecs;
+    // TODO: struct vector* user_tasks ??
+    struct vector* tank_positions;
 };
 void scenario_tick_ser(const struct message *msg, struct vector *dat);
 void scenario_tick_des(struct message *msg, const struct vector *dat);
@@ -129,7 +129,7 @@ struct message {
     // message body. every one of these elements will have an encoding/decoding
     // function associated with them.
     union {
-        struct vector text; /// char vector
+        struct vector* text; /// char vector
         struct user_credentials user_credentials;
         struct player_update player_update;
         struct scenario_tick scenario_tick;

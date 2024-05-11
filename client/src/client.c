@@ -38,16 +38,16 @@ bool g_print_msg;
 
 struct player {
     char username[50];
-    struct vector tanks;
+    struct vector* tanks;
 };
 
-struct vector g_players;
+struct vector* g_players;
 
 void players_update_player(char *username, struct vector *tank_positions) {
     // see if the player exists in the structure.
     struct player *player = NULL;
-    for (size_t p = 0; p < g_players.len; p++) {
-        player = vec_ref(&g_players, p);
+    for (size_t p = 0; p < vec_len(g_players); p++) {
+        player = vec_ref(g_players, p);
         int status = strcmp(username, player->username);
 
         if (status == 0)
@@ -57,19 +57,19 @@ void players_update_player(char *username, struct vector *tank_positions) {
     // this is the else case, we didn't find the player.
     struct player new_player;
     strncpy(new_player.username, username, 50);
-    make_vector(&new_player.tanks, sizeof(struct tank), 30);
+    new_player.tanks = make_vector(sizeof(struct tank), 30);
 
-    vec_push(&g_players, &new_player);
-    player = vec_ref(&g_players, g_players.len - 1);
+    vec_push(g_players, &new_player);
+    player = vec_ref(g_players, vec_len(g_players) - 1);
 
 update_player: ; // can't have a declaration after a label in cstd < c2x
-    vec_resize(&player->tanks, tank_positions->len);
+    vec_resize(player->tanks, vec_len(tank_positions));
 
-    for (size_t t = 0; t < tank_positions->len; t++) {
+    for (size_t t = 0; t < vec_len(tank_positions); t++) {
         struct coordinate coord;
         vec_at(tank_positions, t, &coord);
 
-        struct tank *tank = vec_ref(&player->tanks, t);
+        struct tank *tank = vec_ref(player->tanks, t);
         tank->x = coord.x;
         tank->y = coord.y;
     }
@@ -121,7 +121,7 @@ void authenticate(int argc, char **argv) {
     
     struct message msg;
     make_message(&msg, MSG_REQUEST_AUTHENTICATE);
-    vec_pushn(&msg.user_credentials.username, argv[1], strlen(argv[1]));
+    vec_pushn(msg.user_credentials.username, argv[1], strlen(argv[1]));
     debug_send_msg(msg);
 }
 void change_state(int argc, char **argv) {
@@ -161,8 +161,8 @@ void update_tank(int argc, char **argv) {
 
     // find yourself in player list
     struct player player;
-    for (size_t p = 0; p < g_players.len; p++) {
-        vec_at(&g_players, p, &player);
+    for (size_t p = 0; p < vec_len(g_players); p++) {
+        vec_at(g_players, p, &player);
         if (strcmp(player.username, g_username) == 0)
             goto update_tank_send_update;
     }
@@ -174,12 +174,12 @@ void update_tank(int argc, char **argv) {
     int x = atoi(argv[2]);
     int y = atoi(argv[3]);
 
-    if (index < 0 || index >= (int)player.tanks.len) {
+    if (index < 0 || index >= (int)vec_len(player.tanks)) {
         printf("ERROR: you must index a valid tank!\n");
         return;
     }
     
-    struct tank* tank = vec_ref(&player.tanks, index);
+    struct tank* tank = vec_ref(player.tanks, index);
     tank->move_to_x = x;
     tank->move_to_y = y;
     return;
@@ -191,8 +191,8 @@ void propose_update(int argc, char **argv) {
 
     // find yourself in player list
     struct player player;
-    for (size_t p = 0; p < g_players.len; p++) {
-        vec_at(&g_players, p, &player);
+    for (size_t p = 0; p < vec_len(g_players); p++) {
+        vec_at(g_players, p, &player);
         if (strcmp(player.username, g_username) == 0)
             goto propose_update_tank_send_update;
     }
@@ -203,16 +203,16 @@ void propose_update(int argc, char **argv) {
     struct message msg;
     make_message(&msg, MSG_REQUEST_PLAYER_UPDATE);
 
-    for (size_t t = 0; t < player.tanks.len; t++) {
+    for (size_t t = 0; t < vec_len(player.tanks); t++) {
         struct tank tank;
-        vec_at(&player.tanks, t, &tank);
+        vec_at(player.tanks, t, &tank);
         
         enum tank_command cmd = TANK_MOVE;
         struct coordinate coord = { .x = tank.move_to_x, .y = tank.move_to_y };
            
-        vec_push(&msg.player_update.tank_instructions, &cmd);
-        vec_push(&msg.player_update.tank_target_coords, &coord);
-        vec_push(&msg.player_update.tank_position_coords, &coord);
+        vec_push(msg.player_update.tank_instructions, &cmd);
+        vec_push(msg.player_update.tank_target_coords, &coord);
+        vec_push(msg.player_update.tank_position_coords, &coord);
     }
 
     debug_send_msg(msg);
@@ -223,11 +223,11 @@ void propose_update(int argc, char **argv) {
 
 void list_tanks(int argc, char **argv) {
     (void)argc; (void)argv;    
-    for (size_t p = 0; p < g_players.len; p++) {
-        struct player *player = vec_ref(&g_players, p);
+    for (size_t p = 0; p < vec_len(g_players); p++) {
+        struct player *player = vec_ref(g_players, p);
         printf("[tanks for %s]\n", player->username);
-        for (size_t t = 0; t < player->tanks.len; t++) {
-            struct tank *tank = vec_ref(&player->tanks, t);
+        for (size_t t = 0; t < vec_len(player->tanks); t++) {
+            struct tank *tank = vec_ref(player->tanks, t);
             printf("  [%zu] x: %d y: %d\n", t, tank->x, tank->y);
         }
     }
@@ -238,13 +238,13 @@ void help_page(int argc, char** argv);
 void message_server(int argc, char **argv) {
     struct message msg;
     make_message(&msg, MSG_REQUEST_DEBUG);
-    make_vector(&msg.text, sizeof(char), 50);
+    msg.text = make_vector(sizeof(char), 50);
 
     for (int i = 1; i < argc; i++) {
-        vec_pushn(&msg.text, argv[i], strlen(argv[i]));
-        vec_push(&msg.text, " ");
+        vec_pushn(msg.text, argv[i], strlen(argv[i]));
+        vec_push(msg.text, " ");
     }
-    vec_push(&msg.text, "\0");
+    vec_push(msg.text, "\0");
 
     debug_send_msg(msg);
 }
@@ -431,15 +431,14 @@ void *read_msg_thread(void *arg) {
     g_print_msg = false;
     
     struct message msg = {0};
-    struct vector msg_buf;
-    make_vector(&msg_buf, sizeof(char), 30);
+    struct vector* msg_buf = make_vector(sizeof(char), 30);
     fcntl(g_server_sock, F_SETFL, O_NONBLOCK);
 
     while (g_run_program) {
         if (!g_server_connected)
             continue;
 
-        int status = message_recv(g_server_sock, &msg, &msg_buf);
+        int status = message_recv(g_server_sock, &msg, msg_buf);
 
         if (status < 0)
             continue;
@@ -448,11 +447,11 @@ void *read_msg_thread(void *arg) {
         case MSG_RESPONSE_SCENARIO_TICK: {
 
             struct scenario_tick body = msg.scenario_tick;
-            for (size_t u = 0; u < body.username_vecs.len; u++) {
+            for (size_t u = 0; u < vec_len(body.username_vecs); u++) {
                 char *username =
-                    ((struct vector *)vec_ref(&body.username_vecs, u))->data;
+                    vec_dat(((struct vector *)vec_ref(body.username_vecs, u)));
 
-                struct vector *tanks = vec_ref(&body.tank_positions, u);
+                struct vector *tanks = vec_ref(body.tank_positions, u);
                
                 players_update_player(username, tanks);
             }
@@ -469,7 +468,7 @@ void *read_msg_thread(void *arg) {
     }
 
     
-    free_vector(&msg_buf);
+    free_vector(msg_buf);
     return NULL;
 }
 
@@ -607,12 +606,12 @@ void *gfx_thread(void *arg) {
         gfx_render_grid(renderer, &camera, &tile, grid_spacing,
                         g_map_height, g_map_width, bg_colors, fg_colors);
 
-        for (size_t p = 0; p < g_players.len; p++) {
-            struct player *player = vec_ref(&g_players, p);
+        for (size_t p = 0; p < vec_len(g_players); p++) {
+            struct player *player = vec_ref(g_players, p);
 
-            for (size_t t = 0; t < player->tanks.len; t++) {
+            for (size_t t = 0; t < vec_len(player->tanks); t++) {
                 struct tank tank;
-                vec_at(&player->tanks, t, &tank);
+                vec_at(player->tanks, t, &tank);
                 gfx_draw_tank(renderer, &camera, &tile, grid_spacing, tank.x, tank.y);
             }
         }
@@ -671,7 +670,7 @@ int main(int argc, char **argv) {
     g_server_connected = false;
     g_gfx_running = false;
 
-    make_vector(&g_players, sizeof(struct player), 5);
+    g_players = make_vector(sizeof(struct player), 5);
     
     char* buff = malloc(50);
     size_t buff_size = 50;

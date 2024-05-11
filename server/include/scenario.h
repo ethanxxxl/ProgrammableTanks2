@@ -28,10 +28,12 @@ struct actor {
 
 /* Scenario manager structure for now, objectives will be fixed and
    maps will be plain, (ie nonexistant)
+
+   FIXME vector is now a pointer! this will need to be updated!
  */
 struct scenario {
     struct scenario_map map;
-    struct vector actors;
+    struct vector* actors;
     float tick_rate;
     int tick_number;
 };

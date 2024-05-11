@@ -16,11 +16,12 @@ int make_player(struct player_manager *p) {
 int player_idle_handler(struct player_manager *p, struct message msg) {
     switch (msg.type) {
     case MSG_REQUEST_AUTHENTICATE:
-        strcpy(p->username, msg.user_credentials.username.data);
+        strcpy(p->username, vec_dat(msg.user_credentials.username));
         p->state = STATE_LOBBY; // FIXME: no authentication done here!
         printf("%s: authenticated\n", p->username);
-        printf("%s: authenticated (msg data)\n", (char*)msg.user_credentials.username.data);
-
+        printf("%s: authenticated (msg data)\n",
+               (char*)vec_dat(msg.user_credentials.username));
+        
         {
             char buf[50] = {0};
             int ret =
@@ -94,7 +95,7 @@ int player_scenario_handler(struct player_manager *p, struct message msg) {
         // exist.
         const struct player_update body = msg.player_update;
         
-        int num_tanks = body.tank_instructions.len;
+        int num_tanks = vec_len(body.tank_instructions);
         if (TANKS_IN_SCENARIO < num_tanks)
             num_tanks = TANKS_IN_SCENARIO;
 
@@ -105,9 +106,9 @@ int player_scenario_handler(struct player_manager *p, struct message msg) {
             struct coordinate aim_at;
             enum tank_command command;
             
-            vec_at(&body.tank_position_coords, t, &move_to);
-            vec_at(&body.tank_target_coords, t, &aim_at);
-            vec_at(&body.tank_instructions, t, &command);           
+            vec_at(body.tank_position_coords, t, &move_to);
+            vec_at(body.tank_target_coords, t, &aim_at);
+            vec_at(body.tank_instructions, t, &command);           
 
             struct tank *tank = &actor->tanks[t];
 

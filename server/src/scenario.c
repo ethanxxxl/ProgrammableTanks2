@@ -10,10 +10,9 @@
 #include <time.h>
 
 int make_scenario(struct scenario *scene) {
-    int status;
     
-    status = make_vector(&scene->actors, sizeof(struct actor), 10);
-    if (status != 0) {
+    scene->actors = make_vector(sizeof(struct actor), 10);
+    if (scene->actors == NULL) {
         return -1;
     }
 
@@ -30,7 +29,7 @@ int scenario_add_player(struct scenario *scene, struct player_manager *player) {
         .objective = OBSERVER,
     };
 
-    vec_push(&scene->actors, &a);
+    vec_push(scene->actors, &a);
     
     return 0;
 }
@@ -39,13 +38,13 @@ int scenario_rem_player(struct scenario *scene, struct player_manager *player) {
     size_t actor_id;
 
     // find the actor corresponding to player.
-    for (actor_id = 0; actor_id < scene->actors.len; actor_id++) {
-        struct actor* a = vec_ref(&scene->actors, actor_id);
+    for (actor_id = 0; actor_id < vec_len(scene->actors); actor_id++) {
+        struct actor* a = vec_ref(scene->actors, actor_id);
         if (a->player != player)
             continue; // this isn't the player, keep looking.
 
         // found the player!
-        vec_rem(&scene->actors, actor_id);
+        vec_rem(scene->actors, actor_id);
         return 0;
     }
 
@@ -56,12 +55,12 @@ int scenario_rem_player(struct scenario *scene, struct player_manager *player) {
 struct actor *scenario_find_actor(struct scenario *scene,
                                   struct player_manager *player) {
     // find the actor corresponding to player.
-    for (size_t actor_id = 0; actor_id < scene->actors.len; actor_id++) {
-        struct actor* a = vec_ref(&scene->actors, actor_id);
+    for (size_t actor_id = 0; actor_id < vec_len(scene->actors); actor_id++) {
+        struct actor* a = vec_ref(scene->actors, actor_id);
         if (a->player != player)
             continue; // this isn't the player, keep looking.
 
-        return vec_ref(&scene->actors, actor_id);
+        return vec_ref(scene->actors, actor_id);
     }
 
     return NULL;
@@ -72,10 +71,10 @@ struct actor *scenario_find_actor(struct scenario *scene,
 struct tank* scenario_get_tank(struct scenario *scene,
                                size_t actor_id,
                                size_t tank_id) {
-    if (tank_id >= TANKS_IN_SCENARIO || actor_id >= scene->actors.len)
+    if (tank_id >= TANKS_IN_SCENARIO || actor_id >= vec_len(scene->actors))
         return NULL;
 
-    struct actor* actor = vec_ref(&scene->actors, actor_id);
+    struct actor* actor = vec_ref(scene->actors, actor_id);
     return &actor->tanks[tank_id];
 }
 
@@ -97,7 +96,7 @@ void scenario_fire_tank(struct scenario *scene, struct tank* tank) {
         return;
 
     struct tank* target = NULL;
-    for (size_t p = 0; p < scene->actors.len; p++) {
+    for (size_t p = 0; p < vec_len(scene->actors); p++) {
         for (int t = 0; t < TANKS_IN_SCENARIO; t++) {
             struct tank* other = scenario_get_tank(scene, p, t);
 
@@ -157,16 +156,16 @@ int scenario_tick(struct scenario *scene) {
      */
 
     for (int t = 0; t < TANKS_IN_SCENARIO; t++) {
-        for (size_t a = 0; a < scene->actors.len; a++) {
+        for (size_t a = 0; a < vec_len(scene->actors); a++) {
             scenario_heal_tank(scenario_get_tank(scene, a, t));
         }
 
-        for (size_t a = 0; a < scene->actors.len; a++) {
+        for (size_t a = 0; a < vec_len(scene->actors); a++) {
             scenario_fire_tank(scene,
                                scenario_get_tank(scene, a, t));
         }
 
-        for (size_t a = 0; a < scene->actors.len; a++) {
+        for (size_t a = 0; a < vec_len(scene->actors); a++) {
             scenario_move_tank(scenario_get_tank(scene, a, t));
         }
     }
@@ -194,33 +193,33 @@ int scenario_handler(struct scenario *scene) {
     struct message msg;
     make_message(&msg, MSG_RESPONSE_SCENARIO_TICK);
 
-    for (size_t u = 0; u < scene->actors.len; u++) {
-        const struct actor* actor = vec_ref(&scene->actors, u);
-        struct vector username;
+    for (size_t u = 0; u < vec_len(scene->actors); u++) {
+        const struct actor* actor = vec_ref(scene->actors, u);
 
         // FIXME: the username may not always be limited to 50 chars.
-        make_vector(&username, sizeof(char), 50);
+        struct vector* username =  make_vector(sizeof(char), 50);
         size_t name_len = strnlen(actor->player->username, 50);
-        vec_pushn(&username, actor->player->username, name_len + 1); // include null terminator
+        vec_pushn(username, actor->player->username, name_len + 1); // include null terminator
 
-        vec_push(&msg.scenario_tick.username_vecs, &username);
+        vec_push(msg.scenario_tick.username_vecs, &username);
 
         // add tanks
-        struct vector tank_vec;
-        make_vector(&tank_vec, sizeof(struct coordinate), TANKS_IN_SCENARIO);
+        struct vector* tank_vec =
+            make_vector(sizeof(struct coordinate), TANKS_IN_SCENARIO);
+        
         for (size_t t = 0; t < TANKS_IN_SCENARIO; t++) {
             struct tank this_tank = actor->tanks[t];
             struct coordinate pos_coord = { .x = this_tank.x, .y = this_tank.y };
             
-            vec_push(&tank_vec, &pos_coord);
+            vec_push(tank_vec, &pos_coord);
         }
-        vec_push(&msg.scenario_tick.tank_positions, &tank_vec);
+        vec_push(msg.scenario_tick.tank_positions, &tank_vec);
     }
 
     // send the newly created message.        
-    for (size_t a = 0; a < scene->actors.len; a++) {
+    for (size_t a = 0; a < vec_len(scene->actors); a++) {
         struct actor actor;
-        vec_at(&scene->actors, a, &actor);
+        vec_at(scene->actors, a, &actor);
 
         #ifdef DEBUG
         struct sockaddr_in player_a = *(struct sockaddr_in *)(&actor.player->address);
