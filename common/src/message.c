@@ -122,7 +122,7 @@ int message_recv(int fd, struct message* msg, struct vector* buf) {
 
     // update body_size to match header data, if able.
     if (vec_len(buf) >= MESSAGE_HEADER_SIZE) {
-        body_size = *((int*)vec_dat(buf) + sizeof(enum message_type));
+        body_size = *(int*)vec_byte_ref(buf, sizeof(enum message_type));
     }
 
     if (vec_len(buf) < MESSAGE_HEADER_SIZE ||
@@ -133,6 +133,13 @@ int message_recv(int fd, struct message* msg, struct vector* buf) {
     /* CREATE MESSAGE, CLEAR BUFFER */
     *msg = (struct message){0}; // clear out garbage from msg struct.
     msg->type = *(enum message_type *)vec_dat(buf);
+
+    if (msg->type >= MSG_NULL) {
+        // the message type is not recognized.  Through out the message.
+        vec_resize(buf, 0);
+        printf("received an invalid message!\n");
+        return -1; // message is invalid
+    }
 
     // remove the header from the vector, so it only contains the body.
     for (unsigned int i = 0; i < MESSAGE_HEADER_SIZE; i++)
