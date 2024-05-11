@@ -349,6 +349,7 @@ validated to ensure that no nefarious activity is performed by the player.
    - [ ] Rust
    - [ ] Node JS
    - [ ] Go
+   - [ ] Zig
 ** TODO More Ergonomic Client
 *** TODO GUI Features
     - [ ] buttons
@@ -360,9 +361,71 @@ validated to ensure that no nefarious activity is performed by the player.
 *** TODO Help Command
     Help by itself should list all the commands and a summary for each of them.
     ~help COMMAND~ Will provide detailed information on each command.
+*** TODO Server Console
+    should operate similarly to the client.  This will allow more graceful
+    administration of the server.
 
-* Code Refactor List
+    At a minimum, the server should have the following commands:
+    - [ ] quit
+    - [ ] kick
+    - [ ] remove-scenario
+    - [ ] add-scenario
+    - [ ] help
+
+* Code Quality List
   You need to do something about the vector structure.  You use it everywhere
   for a lot of things.  It is confusing what type is contained in a vector.
   Maybe some typedefs may be helpful?
-  
+
+** TODO vec_concat
+   - [ ] write documentation
+   - [ ] unit test
+
+** TODO vec_byte_ref
+   - [ ] write documentation
+   - [ ] unit test
+   
+** TODO message functions
+   - [ ] write unit tests
+   - [ ] write documentation
+
+** TODO Message Network Ordering
+   Messages are constructed using host order, little endian.  They need to be
+   sent in network order, big endian.
+   
+* Bug Fix List
+** TODO ~connect~ command
+   <2024-05-11 Sat>
+   
+   client segfaults when entering an invalid input on for the connect command
+
+** TODO Disconnected users are retained on the server
+   <2024-05-11 Sat>
+   
+   the server should clean up users that have disconnected, and shouldn't track
+   them.  
+
+** DONE Segfaults on Message Reception
+   <2024-05-11 Sat>
+
+   1) I found the message type on incoming messages was invalid.  The message
+      type is used to index into an array of function pointers.  Since it was
+      invalid, it resulted in a seg fault.
+      - solved by checking for valid message types.
+   2) The message types were invalid because of a casting error.  I originally
+      had:
+
+      #+begin_src c
+        body_size = *(int*)(buf->data + sizeof(enum message_type));
+      #+end_src
+
+      which was changed to:
+
+      #+begin_src c
+        body_size = *(int*)vec_dat(buf) + sizeof(enum message_type);
+      #+end_src
+
+      The cast has higher precedence than the addition, so some random value in
+      memory was being used as the message type.
+
+   <2024-05-11 Sat>
