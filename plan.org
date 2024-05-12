@@ -1,4 +1,8 @@
 #+TITLE: Programable Tanks 2
+#+AUTHOR: Ethan Smith
+#+EMAIL: ethansmith.dev@gmail.com
+
+#+STARTUP: logdone
 
 * Overview
   this is my second attempt to create a game/simulation of AI tank combat.
@@ -327,7 +331,7 @@ validated to ensure that no nefarious activity is performed by the player.
    The encode message function should return a vector that contains the encoded
    body of the message
 
-
+   
 * Feature List
 ** TODO Multiple Scenarios
    - [ ] The Server can create new scenarios
@@ -358,9 +362,16 @@ validated to ensure that no nefarious activity is performed by the player.
     - [ ] integrated console
 *** TODO Flags
 *** TODO Tank Listing
-*** TODO Help Command
+*** DONE Help Command
+    CLOSED: [2024-05-12 Sun 00:41]
     Help by itself should list all the commands and a summary for each of them.
     ~help COMMAND~ Will provide detailed information on each command.
+**** implementation
+     I created a folder for documentation, and put an org file with
+     documentation for each command.  The program parses the org file to get the
+     documentation.  This makes editing/adding docs for commands so much easier
+     than hardcoding it in the C source.
+
 *** TODO Server Console
     should operate similarly to the client.  This will allow more graceful
     administration of the server.
@@ -406,6 +417,7 @@ validated to ensure that no nefarious activity is performed by the player.
    them.  
 
 ** DONE Segfaults on Message Reception
+   CLOSED: [2024-05-11 Sat 14:15]
    <2024-05-11 Sat>
 
    1) I found the message type on incoming messages was invalid.  The message
@@ -427,5 +439,3 @@ validated to ensure that no nefarious activity is performed by the player.
 
       The cast has higher precedence than the addition, so some random value in
       memory was being used as the message type.
-
-   <2024-05-11 Sat>

@@ -53,24 +53,39 @@ struct vector* make_vector(size_t elem_len, size_t size_hint) {
 }
 
 void free_vector(struct vector* vec) {
+    if (vec == NULL)
+        return;
+
     free(vec->data);
     vec->data = NULL;
     free(vec);
 }
 
 void* vec_dat(struct vector* vec) {
+    if (vec == NULL)
+        return NULL;
+    
     return vec->data;
 }
 
 size_t vec_len(const struct vector* vec) {
+    if (vec == NULL)
+        return 0;
+
     return vec->len;
 }
 
 size_t vec_cap(const struct vector* vec) {
+    if (vec == NULL)
+        return 0;
+    
     return vec->capacity;
 }
 
 size_t vec_element_len(const struct vector* vec) {
+    if (vec == NULL)
+        return 0;
+    
     return vec->element_len;
 }
 

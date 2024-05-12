@@ -18,6 +18,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <message.h>
+#include "command-line.h"
 
 // TODO FIXME BUG program segfaults when you enter blank username.
 
@@ -233,8 +234,6 @@ void list_tanks(int argc, char **argv) {
     }
 }
 
-void help_page(int argc, char** argv);
-
 void message_server(int argc, char **argv) {
     struct message msg;
     make_message(&msg, MSG_REQUEST_DEBUG);
@@ -248,11 +247,7 @@ void message_server(int argc, char **argv) {
 
     debug_send_msg(msg);
 }
-void command_error(int argc, char **argv) {
-    (void)argc; (void)argv;
 
-    printf("ERROR: Unknown Command \"%s\"\n", argv[0]);
-}
 void quit(int argc, char **argv) {
     (void)argc; (void)argv;    
     g_run_program = false;
@@ -337,93 +332,36 @@ void start_gfx(int argc, char **argv) {
 // master list of all commands in the client program. In the future, I
 // may integrate the documentation into this structure as well, and
 // make the help function generate the help text automatically.
-const struct command {
-    char name[20];
-    void (*callback)(int, char**);
-    char* docs;
-} COMMANDS[] = {
-    {"connect", &connect_serv,
-     "connect to a server. For debugging purposes, an argument specifying the address \
-and port is optional. (default is 127.0.0.1:4444)"},
-    {"start-gfx", &start_gfx,
-     "starts the SDL2 GUI."},
-    {"list-tanks", &list_tanks, "lists tanks for each player currently connected"},
-    {"update", &propose_update,
-     "NOT IMPLEMENTED"},
-    {"update-tank", &update_tank,
-     "give the tank index, followed by an x and y coordinate, and that tank will move to that location."},
-    {"request", &request_server_update,
-     "NOT IMPLEMENTED"},
-    {"auth", &authenticate,
-     "takes a single argument, which is your username. registers you with the server."},
-    {"change-state", &change_state,
-     "valid options are 'lobby' or 'scene'."},
-    {"list-scenarios", &list_scenarios,
-     "asks the server for available scenarios to join (currently only one)."},
-    {"help", &help_page,
-     "displays this help page."},
-    {"msg", &message_server,
-     "sends the server a DEBUG_MESSAGE. sending a DEBUG_MESSAGE with the text \
-'kill-serv' will cause the server to quit."},
 
-    {"color", &change_bg_color,
-     "changes the bg color of the SDL graphics window."},
+struct command COMMANDS[] = {
+    {"connect", &connect_serv},
+    {"start-gfx", &start_gfx},
+    {"list-tanks", &list_tanks},
+    {"update", &propose_update},
+    {"update-tank", &update_tank},
+    {"request", &request_server_update},
+    {"auth", &authenticate},
+    {"change-state", &change_state},
+    {"list-scenarios", &list_scenarios},
 
-    {"debug-messages", &enable_print_messages,
-     "toggles whether or not to print messages recieved from server."},
+    {"msg", &message_server},
+    {"color", &change_bg_color},
 
-    {"\n", &dummy, NULL},
-    {"q", &quit, "quit this client"},
-    {"quit", &quit, "quit this client"},
-    {"exit", &quit, "quit this client"},
+    {"debug-messages", &enable_print_messages},
+
+    //{"\n", &dummy},
+    {"q", &quit},
+    {"quit", &quit},
+    {"exit", &quit},
 };
 
-void help_page(int argc, char **argv) {
-    (void)argc; (void)argv;    
-    size_t max_len = 0;
-    const size_t num_cmds = sizeof(COMMANDS) / sizeof(struct command);
-
-    for (size_t i = 0; i < num_cmds; i++) {
-        if (strlen(COMMANDS[i].name) > max_len)
-            max_len = strlen(COMMANDS[i].name);
-    }
-
-    printf("Here are all possible commands that you could enter:\n");
-    for (size_t i = 0; i < num_cmds; i++) {
-        if (COMMANDS[i].name[0] == '\n')
-            continue;
-
-        // add appropriate amount of spacing to right align docs
-        for (size_t n = 0; n < max_len - strlen(COMMANDS[i].name); n++)
-            printf(" ");
-
-        printf(" \033[1m%s\033[0m", COMMANDS[i].name);
-
-        if (COMMANDS[i].docs != NULL)
-            printf(" :: %s", COMMANDS[i].docs);
-
-        printf("\n");
-    }
-}
-
-// call the appropriate callback function for the command passed in.
-void manage_commands(int argc, char **argv) {
-    struct command const *cmd = COMMANDS;
-    const size_t N_ELEM = sizeof(COMMANDS)/sizeof(struct command);
-
-    if (argc <= 0)
-        return;
-
-    while (strcmp((cmd)->name, argv[0]) != 0
-           && (size_t)(cmd - COMMANDS) < N_ELEM) cmd++;
+struct command_line_args COMMAND_LINE_ENVIRONMENT = {
+    .documentation_file = "documentation/client-commands.org",
+    .command_list = COMMANDS,
+    .num_commands = sizeof(COMMANDS)/sizeof(struct command),
+    .run_program = &g_run_program,
+};
     
-    if ((size_t)(cmd - COMMANDS) >= N_ELEM) {
-        command_error(argc, argv);
-        return;
-    }
-
-    cmd->callback(argc, argv);
-}
 
 void *read_msg_thread(void *arg) {
     (void)arg; // arg is unused.
@@ -671,31 +609,20 @@ int main(int argc, char **argv) {
     g_gfx_running = false;
 
     g_players = make_vector(sizeof(struct player), 5);
-    
-    char* buff = malloc(50);
-    size_t buff_size = 50;
 
     puts(g_welcome_message);
-    
-    while (g_run_program) {
-        printf("> ");
-        fflush(stdout);
 
-        getline(&buff, &buff_size, stdin);
-        
-        char* argv[10];
-        int i = 0;
-        for (char* token = strtok(buff, " \n");
-             token != NULL;
-             token = strtok(NULL, " \n")) {
-            argv[i++] = token;
-        }
-
-        manage_commands(i, argv);
-    }
+    pthread_t command_line_pid = 0;
+    pthread_create(&command_line_pid,
+                   NULL,
+                   &command_line_thread,
+                   &COMMAND_LINE_ENVIRONMENT);
 
     printf("quitting program...\n");
 
+    if (command_line_pid != 0)
+        pthread_join(command_line_pid, NULL);
+    
     if (g_gfx_pid != 0)
         pthread_join(g_gfx_pid, NULL);
 

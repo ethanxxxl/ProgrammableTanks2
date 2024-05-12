@@ -1,0 +1,114 @@
+#+TITLE: Client Commands Documentation
+#+AUTHOR: Ethan Smith
+#+EMAIL: ethansmith.dev@gmail.com
+
+This file contains documentation for each command built into the client.  The
+client will parse this file to produce output for the ~help~ command.
+
+The first paragraph of each section should be a brief summary of the command.
+This summary will appear next to each command when ~help~ is run without
+arguments.  Subsequent paragraphs will be shown when ~help COMMAND~ is run on
+~COMMAND~.
+
+even though an entire paragraph can be used as a brief description, try to keep
+it as a single line.
+
+* connect
+  connect to the server.
+
+  usage: connect [OPT ADDRESS]
+  
+  Attempts to establish a connection with a Programmable Tanks 2 Server.  For
+  debugging purposes, an argument specifying the address and port are optional.
+
+  The default IP address and port is 127.0.0.1:4444
+
+* start-gfx
+  starts the SDL2 GUI.
+
+  usage: start-gfx
+
+  Starts a graphical user interface that displays the current map and tank
+  positions.  Currently, you cannot interact with the game via this display.
+
+* list-tanks
+  NOT IMPLEMENTED
+
+* update
+  updates tank positions on the client.  Not on the server.
+
+  usage: update
+
+  Any changes done in the scene will be sent to the server when this command is
+  called.  
+  
+* update-tank
+  schedule a tank move operation.
+  
+  usage: update ID X Y
+
+  sets the position of the specified tank.  If the new position is farther than
+  the tank can move in a single turn, the tank will take multiple turns to reach
+  that position.  The tank will not attempt to move until ~update-tank~ is run.
+
+* request
+  NOT IMPLEMENTED
+
+* auth
+  make yourself known to the server
+
+  usage: auth USERNAME
+
+  takes a single argument, which is your username. registers you with the
+  server.  Currently, there is no security.  If you say you are someone, you are
+  that person.
+  
+* change-state
+  enter a scenario or return to the lobby.
+
+  usage: change-state STATE
+
+  STATE can be 'lobby' or 'scene'.
+
+  changes the state of the player between the lobby and a scenario.  The server
+  only supports a single scenario at the moment, so you don't get a choice
+  between scenarios.
+
+  This command also sends a message to the server.  Entering a scenario via this
+  command enters you into a scenario on the server.
+
+* list-scenarios
+  lists scenarios available on the server.
+
+  usage: list_scenarios
+
+  This command will ask the server for available scenarios to join.  The server
+  only supports a single scenario currently, so this list is rather sparse.
+  
+* msg
+  send the server a DEBUG_MESSAGE.
+
+  usage: msg
+
+  sends the server a DEBUG_MESSAGE. sending a DEBUG_MESSAGE with the text
+  'kill-serv' will cause the server to quit.
+  
+* color
+  changes the bg color of the SDL graphics window.
+
+  usage: color COLOR
+
+  The color is an 8-bit value (0-255).  I think the most significant part of
+  larger values are ignored. 
+  
+* debug-messages
+  toggles whether or not to print messages received from the server.
+  
+* q
+  quit this client
+
+* quit
+  quit this client
+
+* exit
+  quit this client
