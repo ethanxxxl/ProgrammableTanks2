@@ -1,9 +1,11 @@
 #include "command-line.h"
+#include "vector.h"
+
 #include <ctype.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
-#include "vector.h"
+#include <readline/readline.h>
 
 struct vector* cmd_get_documentation(const char* cmd_name,
                                      const char* docfile_name,
@@ -188,18 +190,19 @@ void try_call_command(const struct command_line_args* env,
 void* command_line_thread(void* a) {
     struct command_line_args* env = a;
 
-    char* buff = malloc(50);
-    size_t buff_size = 50;
-
     while (*(env->run_program)) {
-        printf("> ");
-        fflush(stdout);
-
-        size_t bytes_read = getline(&buff, &buff_size, stdin);
+        // get the next command with GNU readline
+        char* linebuf_tmp = readline("> ");
+        size_t bytes_read = strlen(linebuf_tmp);
+        
+        // copy the data into a stack buffer, and free the dynamic buffer
+        char linebuf[bytes_read];
+        memcpy(linebuf, linebuf_tmp, bytes_read+1); // include null terminator
+        free(linebuf_tmp);
 
         // filter out blank entries.
         size_t space_offset = 0;
-        for (; isspace(buff[space_offset]) && space_offset < bytes_read;
+        for (; isspace(linebuf[space_offset]) && space_offset < bytes_read;
                space_offset++);
 
         if (space_offset+1 == bytes_read)
@@ -207,7 +210,7 @@ void* command_line_thread(void* a) {
         
         char* argv[10];
         int i = 0;
-        for (char* token = strtok(buff, " \n");
+        for (char* token = strtok(linebuf, " \n");
              token != NULL;
              token = strtok(NULL, " \n")) {
             argv[i++] = token;

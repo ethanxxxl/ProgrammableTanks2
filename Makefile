@@ -17,7 +17,7 @@ SERVER_DIR = server/src
 SRC_SERVER = main.c scenario.c player_manager.c
 
 CLIENT_DIR = client/src
-SRC_CLIENT = client.c
+SRC_CLIENT = client.c client-commands.c client-gfx.c game-manager.c
 
 # unit tests will work differently, each unit will have a main function.
 TESTER_DIR = unit-tests
@@ -36,7 +36,7 @@ OBJ_TESTER = $(patsubst %.c,$(BUILDDIR)/$(TESTER_DIR)/%.o,$(SRC_TESTER))
 OBJ = $(OBJ_COMMON) $(OBJ_SERVER) $(OBJ_CLIENT) $(OBJ_TESTER)
 
 INC = -Icommon/include -Iclient/include -Iserver/include
-LIB = -lSDL2 -lm -pthread
+LIB = -lSDL2 -lm -pthread -lreadline
 
 SERVER_BIN = $(BUILDDIR)/server-app
 CLIENT_BIN = $(BUILDDIR)/client-app

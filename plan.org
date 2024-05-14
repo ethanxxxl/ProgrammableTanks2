@@ -384,7 +384,7 @@
     - [ ] remove-scenario
     - [ ] add-scenario
     - [ ] help
-
+      
 * Code Quality List
   You need to do something about the vector structure.  You use it everywhere
   for a lot of things.  It is confusing what type is contained in a vector.
@@ -399,16 +399,26 @@
    - [ ] unit test
    
 ** TODO message functions
+
+   [2024-05-12 Sun]
    - [ ] write unit tests
    - [ ] write documentation
 
 ** TODO Message Network Ordering
-   Messages are constructed using host order, little endian.  They need to be
+   [2024-05-12 Sun] Messages are constructed using host order, little endian.  They need to be
    sent in network order, big endian.
 
-** TODO Cleanup Client
-   split the client up into functional units
+** DONE Cleanup Client
+   CLOSED: [2024-05-13 Mon 22:11]
+   [2024-05-12 Sun] Split the client up into functional units
    
+** TODO Sort out game data in the common headers
+   
+   [2024-05-13 Mon] Move game-related header information, such as tank data,
+   position coordinates, etc to a separate file.  Translation units that depend
+   on game data but do not send messages to the server shouldn't have to include
+   the whole networking stack.
+
 * Bug Fix List
 ** TODO ~connect~ command
    <2024-05-11 Sat>
