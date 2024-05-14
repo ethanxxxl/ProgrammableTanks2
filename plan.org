@@ -374,17 +374,28 @@
      documentation.  This makes editing/adding docs for commands so much easier
      than hardcoding it in the C source.
 
-*** TODO Server Console
+** TODO Server Admin Tweaks
+   These are additions that will flesh out the the server.
+   
+*** DONE Command Line Input
+    CLOSED: [2024-05-14 Tue 13:02]
     should operate similarly to the client.  This will allow more graceful
     administration of the server.
 
+*** TODO Console Commands [2/5]
     At a minimum, the server should have the following commands:
-    - [ ] quit
+    - [X] quit
     - [ ] kick
     - [ ] remove-scenario
     - [ ] add-scenario
-    - [ ] help
+    - [X] help
       
+*** TODO Logging
+    Add logging to fascilitate debugging.  You should log things such as:
+    - accepted connections.
+    - messages recieved
+    - integrity checks
+    - random debug messages
 * Code Quality List
   You need to do something about the vector structure.  You use it everywhere
   for a lot of things.  It is confusing what type is contained in a vector.

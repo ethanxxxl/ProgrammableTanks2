@@ -1,0 +1,7 @@
+#+TITLE: Server Command Documentation
+#+AUTHOR: Ethan Smith
+#+EMAIL: ethansmith.dev@gmail.com
+
+This Org file is used to provide documentation for server commands.  A command
+is a top-level heading.  The first paragraph is a brief description of the
+command.  All subsequent paragraphs form the detailed documentation.

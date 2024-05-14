@@ -14,7 +14,7 @@ COMMON_DIR = common/src
 SRC_COMMON = message.c vector.c command-line.c
 
 SERVER_DIR = server/src
-SRC_SERVER = main.c scenario.c player_manager.c
+SRC_SERVER = main.c scenario.c player_manager.c server-commands.c
 
 CLIENT_DIR = client/src
 SRC_CLIENT = client.c client-commands.c client-gfx.c game-manager.c

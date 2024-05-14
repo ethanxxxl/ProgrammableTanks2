@@ -1,20 +1,23 @@
 #include "player_manager.h"
+#include "command-line.h"
+#include "server-commands.h"
+
+#include "scenario.h"
+#include "message.h"
+
 #include <stddef.h>
 #include <stdio.h>
 #include <stdbool.h>
 #include <stdlib.h>
-
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <string.h>
 #include <sys/socket.h>
 
-#include <scenario.h>
-#include <message.h>
 #include <pthread.h>
 #include <fcntl.h>
 
-bool g_run;
+bool g_run_server;
 extern struct scenario g_scenario;
 
 struct {
@@ -49,16 +52,26 @@ void *accept_connections_thread(void* port_num) {
  
     // enable listening
     listen(sock, 1);
+
+    // We don't want the accept function blocking us from checking
+    // `g_run_server`
+    fcntl(sock, F_SETFL, O_NONBLOCK);
+
     g_connections_len = 0;
 
     printf("] server started on %s port %d\n",
            inet_ntoa(name.sin_addr), name.sin_port);
     
-    while (g_run) {
+    while (g_run_server) {
         struct sockaddr client_addr;
         socklen_t client_size;
 
         int client_fd = accept(sock, &client_addr, &client_size);
+
+        // check for errors
+        if (client_fd == -1) {
+            continue;
+        }
 
         // set the connection to nonblocking
         fcntl(client_fd, F_SETFL, O_NONBLOCK);
@@ -126,7 +139,7 @@ void handle_client(struct player_manager* p, struct vector* msg_buf) {
         printf("%s: %s\n", p->username, (char*)vec_dat(msg.text));
         
         if (strcmp((char*)vec_dat(msg.text), "kill-serv") == 0) {
-            g_run = false;
+            g_run_server = false;
         }
     }
 
@@ -138,7 +151,7 @@ void handle_client(struct player_manager* p, struct vector* msg_buf) {
 void* client_request_thread(void *arg) {
     (void)arg; // arg is unused.
     
-    while (g_run) {     
+    while (g_run_server) {     
         // you will handle stuff here, like printing debug messages!
         for (int i = 0; i < g_connections_len; i++) {
             handle_client(g_connections[i].client,
@@ -166,6 +179,7 @@ connected clients, along with other miscellaneous information.\n\
 This simulation is written and maintained by Ethan Smith.\n";
 
 
+
 int main(int argc, char** argv) {
     int port_num = 4444;
     if (argc == 2)
@@ -176,7 +190,7 @@ int main(int argc, char** argv) {
     puts(g_welcome_message);
 
     // start networking thread
-    g_run = true;
+    g_run_server = true;
 
     pthread_t network_thread_pid;
     pthread_create(&network_thread_pid,
@@ -190,6 +204,17 @@ int main(int argc, char** argv) {
                    &client_request_thread,
                    NULL);
 
-    // run updates.
-    while (g_run);
+    pthread_t cmd_line_thread_pid;
+    pthread_create(&cmd_line_thread_pid,
+                   NULL,
+                   &command_line_thread,
+                   &server_command_line_args);
+
+    while (g_run_server);
+    pthread_join(cmd_line_thread_pid, NULL);
+    pthread_join(client_thread_pid, NULL);
+    pthread_join(network_thread_pid, NULL);
+
+    printf("server exited successfully\n");
+    return 0;
 }
