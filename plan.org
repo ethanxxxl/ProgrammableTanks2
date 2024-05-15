@@ -3,6 +3,7 @@
 #+EMAIL: ethansmith.dev@gmail.com
 
 #+STARTUP: logdone overview
+#+TODO: TODO STARTED DOCUMENT | DONE(d)
 
 * Overview
   this is my second attempt to create a game/simulation of AI tank combat.
@@ -174,166 +175,165 @@
    applicable scenario layer to be validated and applied.  It is in the scenario
    where tank positions will be updated or scheduled.
     
-* Networking API
-  This is meant to be a multiplayer game/simulation.  While all player
-  operations will be validated by the server, the processing required to
-  determine those moves must be done by the clients.
 
-  The messages that may be sent over the network to exchange information are
-  described in this section.
+* Networking Specification
+  Network connections between the client (player) and the server are stateful.
+  A client can be in one of three states: /Idle/, /Lobby/, or /Scenario/.  The
+  client can transition between these states by sending the appropriate message
+  to the server.
 
-  Every client connected to the server will have its state tracked.  When a
-  network connection is made to the server, it must first authenticate itself as
-  a particular user before any other messages will be accepted.  *for now, it is
-  sufficient to simply provide a name, there is no security.*
+  The format of all messages that are sent between client and server is listed
+  in subsequent sections.
 
-** Connection State Diagram
-*** STATE_IDLE
-    this state is used for "players" who have made a network connection to the
-    server, but have yet to be authenticated.  The only way to move out of this
-    the state is to send an "authenticate" message that provides the user
-    authentication.
-    
-*** STATE_LOBBY
-    The player has been authenticated and can view all the scenarios which are
-    currently active, join a scenario, or create a new scenario.
+** Header Structure
+   All data encoded in a message will be in network order (big-endian). 
 
-*** STATE_SCENARIO
-    After creating or joining a scenario, the player can do normal gameplay
-    things.
+   Message header data will be 8 bytes in length, and consist of two fields:
+   /Message Type/ and /Body Length/.
 
-** DONE Client Connection Request
-   For now, clients will self-identify, and no authentication will be done.  In
-   the future, there should be some sort of traffic encryption and
-   authentication to protect OPSEC for individual players.
+   #+CAPTION: Message Header
+   | Byte |            0 |         1-4 |
+   | Desc | Message Type | Body Length |
 
-** TODO Client Map Request
-   client requests map data from the server.  The server will provide all map
-   information.  Future iterations of the sim may limit the amount of the map
-   that is revealed; visible portions may be limited by the player's area of
-   control.
-
-   for now, the server will provide a *complete listing of the game object
-   locations*.
-
-** TODO Client Update Request
-   the client will update parameters on specific game objects.
-
-** TODO Server Validation Response
-   The server sends this message in response to a position update request.  This
-   response indicates whether the proposed update was accepted.
-
-   The server should enumerate which game object updates were valid and which
-   ones were invalid.
-
-** Message Structure
-   I need to be able to receive and send messages.  I have a bunch of message
-   types.
-
-   What do you have going on currently?  you have three functions:
-   - send_message
-   - recv_message
-   - message_length
-
-   #+begin_src c
-     /// place to remember to update
-     enum message_type {
-         ...
-     };
-
-     struct message {
-         enum message_type type;
-         union msg_data { ... };
-     };
-
-     /// place to remember to update
-     int message_len(struct message* msg) {
-         switch (msg->type) {
-
-         }
-     }
-
-     /// place to remember to update
-     void send_message(enum message_type* msg) {
-         switch (msg->type) {
-             ...
-                 }
-     }
-
-     /// place to remember to update
-     void rcv_message(struct message* msg) {
-         switch (msg->type) {
-             ...
-                 }
-     }
-
-     /// place to remember to update
-     void free_message(struct message* msg) {
-         switch (msg->type) {
-             ...
-                 }
-     }
-   #+end_src
-
-   With this setup, there are 5 places I have to remember to update every time I
-   want to add a message.  This is too much, and I have already been bitten in
-   the butt because of it.  There needs to be a more consolidated way to add new
-   messages.
-
-   This style is also confusing because it is not certain which union fields go
-   with which message types, especially since not all message types are even
-   associated with a union field.
-
-   #+begin_src c
-     // place to update for a new message
-     enum message_type {
-         ...
-     };
-
-     struct message {
-         enum message_type type;
-
-         void* body; // this would be cast to the correct data structure and would
-                     // have to be dynamically allocated, if an allocation is
-                     // necessary.
-     };
-
-     // place to update for a new message
-     struct {
-         void (*encode_message)(void);
-         void (*decode_message)(void);
-         void (*free_message)(void);
-     } g_messages[] = {
-         [MSG1] = { ...; ...; ...; },
-         [MSG2] = { ...; ...; ...; }
-     };
-   #+end_src
-
-   With the setup above, there are only two places where a message.  without
-   considering the functions that need to be written for the new message.  This
-   would be superior to the other system since it is more consolidated, and
-   there is less room for error.
-
-   One downside to this is that you have a void pointer in the message
-   structure, which makes it a bit less ergonomic.
-
-   Here is the thing, some messages will have data that will not be known at
-   compile time.  You will need to have dynamically allocated memory for these
-   messages.  Essentially anything that transmits a string falls into this
-   category.
-
-   you don't want to have the body be cast to things such as vectors, since that
-   would essentially mean doing two mallocs just for a single piece of data.
-
-   when you receive data, it will be put into an expanding buffer.  that data is
-   then decoded into a message.  for now, let's just keep doing it how you were,
-   and malloc more than probably necessary.  If if becomes a problem in the
-   future, then we can fix it then.
-
-   The encode message function should return a vector that contains the encoded
-   body of the message
-
+   While sets of messages sent by the client and server are mutually exclusive,
+   each /Message Type/ will be unique.  Message Types from ~0x00~ through ~0x7f~
+   originate from the client.  /Message Types/ from ~0x80~ through ~0xff~
+   originate from the server.
+         
+** Message Type Summary
+   #+CAPTION: Summary of Messages
+   | /Message Type/ | Description              |
+   |----------------+--------------------------|
+   |           0x00 | REQUEST_AUTHENTICATE     |
+   |           0x01 | REQUEST_LIST_SCENARIOS   |
+   |           0x02 | REQUEST_CREATE_SCENARIO  |
+   |           0x03 | REQUEST_JOIN_SCENARIO    |
+   |           0x04 | REQUEST_PLAYER_UPDATE    |
+   |           0x05 | REQUEST_RETURN_TO_LOBBY  |
+   |           0x06 | REQUEST_DEBUG            |
+   |----------------+--------------------------|
+   |           0x80 | RESPONSE_SCENARIO_TICK   |
+   |           0x81 | RESPONSE_SUCCESS         |
+   |           0x82 | RESPONSE_FAIL            |
+   |           0x83 | RESPONSE_INVALID_REQUEST |
    
+** IDLE State Requests
+   #+CAPTION: Messages sent by the client in the IDLE state
+   | /Message Type/ | Description              |
+   |----------------+--------------------------|
+   |           0x00 | REQUEST_AUTHENTICATE     |
+   
+
+** LOBBY State Requests
+   #+CAPTION: Messages sent by the client in the LOBBY state
+   | /Message Type/ | Description             |
+   |----------------+-------------------------|
+   |           0x01 | REQUEST_LIST_SCENARIOS  |
+   |           0x02 | REQUEST_CREATE_SCENARIO |
+   |           0x03 | REQUEST_JOIN_SCENARIO   |
+   
+** SCENARIO State Requests
+   #+CAPTION: Messages sent by the client in the SCENARIO state
+   | /Message Type/ | Description             |
+   |----------------+-------------------------|
+   |           0x04 | REQUEST_PLAYER_UPDATE   |
+   |           0x05 | REQUEST_RETURN_TO_LOBBY |
+   |           0x06 | REQUEST_DEBUG           |
+
+*** REQUEST_PLAYER_UPDATE
+    A PLAYER_UPDATE message should be sent by each client in a scenario at least
+    once per tick.  This mesage contains contain two sections:
+    - TANK_TARGETS
+    - TANK_INSTRUCTIONS
+
+    Each section is a list containing data points that describe the tank at each
+    index.  The number of tanks in these sections does not need to be sent to
+    the server, as the server specifies how many tanks each user has in the
+    first place.
+      
+    The data points for each section are formatted accordingly:
+
+    #+CAPTION: PLAYER_UPDATE Section Formats
+    | Section           | Data Point Format        |
+    |-------------------+--------------------------|
+    | TANK_TARGET       | [32-bit x][32-bit y]     |
+    | TANK_INSTRUCTIONS | [8-bit instruction data] |
+
+    The instruction data encodes what the tank is supposed to do on that turn:
+    #+CAPTION: TANK_INSTRUCTIONS value map
+    | Value | Name   | Description                                        |
+    |     0 | MOVE   | The tank should move to TARGET                     |
+    |     1 | FIRE   | the tank should shoot at TARGET                    |
+    |     2 | REPAIR | TARGET is ignored.  Tank attempts to repair itself |
+    
+*** REQUEST_RETURN_TO_LOBBY
+    There is no body associated with this message.  Upon reception by the
+    server, the player associated with the connection will be sent to the lobby.
+
+*** REQUEST_DEBUG
+    
+** Server Responses
+   | /Message Type/ | Description              |
+   |----------------+--------------------------|
+   |           0x80 | RESPONSE_SCENARIO_TICK   |
+   |           0x81 | RESPONSE_SUCCESS         |
+   |           0x82 | RESPONSE_FAIL            |
+   |           0x83 | RESPONSE_INVALID_REQUEST |
+
+*** RESPONSE_SCENARIO_TICK
+    In a particular scenario, all connected clients will will periodically
+    recieve this message.  This ~SCENARIO_TICK~ message indicates that a turn in
+    the scenario has passed, and the next one is beginning.  The tick message
+    will also include a copy of the scenario state.
+    
+    /in future iterations of this specification, it may be necessary to limit
+    how much information is sent.  It may be unnecessary to send a complete
+    snapshot of everything in the secnario.  Only an update of what has changed
+    since the previous tick may be required./
+
+    the body of a ~SCENARIO_TICK~ will consist of four /sections/ in the
+    following order:
+    - USERNAMES
+    - NUM_TANKS
+    - TANK_STATES
+    - TANK_POSITIONS
+
+    Each /section/ will consist of N /entries/.  N is determined by the number
+    of usernames in the USERNAMES section.
+
+    The USERNAMES section will consist of ASCII usernames separated by commas.
+    As previously mentioned, the number of usernames in this section determines
+    the number of entries in subsequent sections.
+
+    for example, a valid USERNAMES section for a scene with four users will look
+    like this:
+    
+    : "MindM4ge202,StratS0rc3rer5,R1ddleRebel13,Cr4ftyConjurer11"
+
+    The next section, NUM_TANKS, specifies how many tanks are associated with
+    each user.  There will be N entries in this section.  Each entry will be a
+    32-bit integer (big endian).  Continuing with the previous example, a valid
+    NUM_TANKS section may be seen as follows:
+
+    | bytes     | 0-3 | 4-7 | 8-11 | 12-15 |
+    | NUM_TANKS |   5 |   5 |    8 |     8 |
+
+    The next two sections, TANK_STATES and TANK_POSITIONS, consist of N entries,
+    where each entry is a list of /data points/ related to the tank at that
+    index.  Simply put, each /data point/ describes a tank that belongs to a
+    user.
+
+    In this iteration of the specificaion, the TANK_STATES section is reserved
+    for future use.
+
+    As previously described, the TANK_POSITIONS section contains N entries.
+    Each entry is a list of data points which describe the position of the tank
+    being indexed.  A tank position data point consists of an x and y value,
+    each 32 bits in size.  Thus each data point will be 64 bits in length
+    
+*** RESPONSE_SUCCESS
+*** RESPONSE_FAIL
+*** RESPONSE_INVALID_REQUEST
 * Feature List
 ** TODO Multiple Scenarios
    - [ ] The Server can create new scenarios
@@ -401,13 +401,9 @@
   for a lot of things.  It is confusing what type is contained in a vector.
   Maybe some typedefs may be helpful?
 
-** TODO vec_concat
-   - [ ] write documentation
-   - [ ] unit test
-
-** TODO vec_byte_ref
-   - [ ] write documentation
-   - [ ] unit test
+** DONE Cleanup Client
+   CLOSED: [2024-05-13 Mon 22:11]
+   [2024-05-12 Sun] Split the client up into functional units
    
 ** TODO message functions
 
@@ -415,20 +411,19 @@
    - [ ] write unit tests
    - [ ] write documentation
 
-** TODO Message Network Ordering
-   [2024-05-12 Sun] Messages are constructed using host order, little endian.  They need to be
-   sent in network order, big endian.
-
-** DONE Cleanup Client
-   CLOSED: [2024-05-13 Mon 22:11]
-   [2024-05-12 Sun] Split the client up into functional units
-   
 ** TODO Sort out game data in the common headers
-   
    [2024-05-13 Mon] Move game-related header information, such as tank data,
    position coordinates, etc to a separate file.  Translation units that depend
    on game data but do not send messages to the server shouldn't have to include
    the whole networking stack.
+
+** TODO vec_byte_ref
+   - [ ] write documentation
+   - [ ] unit test
+   
+** TODO vec_concat
+   - [ ] write documentation
+   - [ ] unit test
 
 * Bug Fix List
 ** TODO ~connect~ command
@@ -466,4 +461,7 @@
       The cast has higher precedence than the addition, so some random value in
       memory was being used as the message type.
 
-      
+** TODO Message Network Ordering
+   [2024-05-12 Sun] Messages are constructed using host order, little endian.  They need to be
+   sent in network order, big endian.
+
