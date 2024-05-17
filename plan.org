@@ -233,7 +233,7 @@
    |           0x03 | REQUEST_JOIN_SCENARIO   |
    
 ** SCENARIO State Requests
-   #+CAPTION: Messages sent by the client in the SCENARIO state
+   #+CAPTION: messages sent by the client in the SCENARIO state
    | /Message Type/ | Description             |
    |----------------+-------------------------|
    |           0x04 | REQUEST_PLAYER_UPDATE   |
@@ -242,9 +242,9 @@
 
 *** REQUEST_PLAYER_UPDATE
     A PLAYER_UPDATE message should be sent by each client in a scenario at least
-    once per tick.  This mesage contains contain two sections:
-    - TANK_TARGETS
+    once per tick.  This message contains contain two sections (in order):
     - TANK_INSTRUCTIONS
+    - TANK_TARGETS
 
     Each section is a list containing data points that describe the tank at each
     index.  The number of tanks in these sections does not need to be sent to
@@ -256,14 +256,15 @@
     #+CAPTION: PLAYER_UPDATE Section Formats
     | Section           | Data Point Format        |
     |-------------------+--------------------------|
-    | TANK_TARGET       | [32-bit x][32-bit y]     |
     | TANK_INSTRUCTIONS | [8-bit instruction data] |
+    | TANK_TARGET       | [32-bit x][32-bit y]     |
+
 
     The instruction data encodes what the tank is supposed to do on that turn:
     #+CAPTION: TANK_INSTRUCTIONS value map
     | Value | Name   | Description                                        |
     |     0 | MOVE   | The tank should move to TARGET                     |
-    |     1 | FIRE   | the tank should shoot at TARGET                    |
+    |     1 | FIRE   | The tank should shoot at TARGET                    |
     |     2 | REPAIR | TARGET is ignored.  Tank attempts to repair itself |
     
 *** REQUEST_RETURN_TO_LOBBY
@@ -400,30 +401,81 @@
   You need to do something about the vector structure.  You use it everywhere
   for a lot of things.  It is confusing what type is contained in a vector.
   Maybe some typedefs may be helpful?
+  
+** TODO [#A] update networking specification
+   update the message functions to reflect what you have written in this
+   document for the networking specification.
+
+   - [4/4] player_update functions
+     + [X] serialize
+     + [X] deserialize
+     + [X] init
+     + [X] free
+   - [0/4] scenario_tick functions
+     + [ ] serialize
+     + [ ] deserialize
+     + [ ] init
+     + [ ] free
+** TODO [#A] Message Functions (All)
+   [2024-05-12 Sun]
+   - [ ] write unit tests
+   - [ ] write documentation
+
+** TODO [#B] vec_byte_ref
+   - [ ] write documentation
+   - [ ] unit test
+   
+** TODO [#B] vec_concat
+   - [ ] write documentation
+   - [ ] unit test
+
+** TODO [#B] vector types
+   It is frustrating working with vectors that have a seemingly unknown type
+   whenever you declare them.
+
+   #+begin_src c
+     struct some_type {
+         struct vector* v1;
+         struct vector* v2;
+         struct vector* v3;
+     }
+   #+end_src
+
+   When I look at my code 3 months after I wrote this, I have no idea what type
+   v1, v2, and v3 are.  I know that they are vectors, but vectors of what?  At a
+   minimum, I want something in the declaration that shows the element type of
+   the vector.  Then I can cast the data to the correct type when I am using it.
+
+   #+begin_src C :flags -I./common/include common/src/vector.c
+     #include "vector.h"
+     #include <stdio.h>
+
+     int main() {
+         struct vector* my_vec = make_vector(sizeof(int), 10);
+         for (int i = 0; i < 10; i++)
+             vec_push(my_vec, &i);
+
+         for (int i = 0; i < vec_len(my_vec); i++) {
+             printf("%i ", *(int*)vec_ref(my_vec, i));
+         }
+
+         printf("\n");
+         return 0;
+     }
+   #+end_src
+
+   #+RESULTS:
+   : 0 1 2 3 4 5 6 7 8 9
 
 ** DONE Cleanup Client
    CLOSED: [2024-05-13 Mon 22:11]
    [2024-05-12 Sun] Split the client up into functional units
    
-** TODO message functions
-
-   [2024-05-12 Sun]
-   - [ ] write unit tests
-   - [ ] write documentation
-
-** TODO Sort out game data in the common headers
+** TODO [#C] Sort out game data in the common headers
    [2024-05-13 Mon] Move game-related header information, such as tank data,
    position coordinates, etc to a separate file.  Translation units that depend
    on game data but do not send messages to the server shouldn't have to include
    the whole networking stack.
-
-** TODO vec_byte_ref
-   - [ ] write documentation
-   - [ ] unit test
-   
-** TODO vec_concat
-   - [ ] write documentation
-   - [ ] unit test
 
 * Bug Fix List
 ** TODO ~connect~ command

@@ -216,19 +216,31 @@ void player_update_ser(const struct message *msg, struct vector *dat) {
     // do a sanity check first
     struct vector* instructions  = msg->player_update.tank_instructions;
     struct vector* target_coords = msg->player_update.tank_target_coords;
-    struct vector* pos_coords    = msg->player_update.tank_position_coords;
 
-    // lisp syntax is more succinct here:
-    // (not (= instructions.len target_coords.len pos_coords.len))
-    if ((vec_len(instructions) != vec_len(target_coords)) ||
-        (vec_len(instructions) != vec_len(pos_coords)))
+    if (vec_len(instructions) != vec_len(target_coords))
         // TODO: this should return -1.
         return;
 
-    // add each element to the data stream.
-    vec_concat(dat, instructions);
-    vec_concat(dat, target_coords);
-    vec_concat(dat, pos_coords);
+    // add each element to the data stream. 
+    for (size_t i = 0; i < vec_len(instructions); i++) {
+        // convert a tank command enum to a uint8_t, without losing any data due
+        // to endianness
+        uint8_t tank_command =
+            (uint8_t)(*(enum tank_command*)vec_ref(instructions, i));
+
+        vec_push(dat, &tank_command);
+    }
+
+    // convert each element in the data stream to network order
+    for (size_t i = 0; i < vec_len(target_coords); i++) {
+        struct coordinate* target = vec_ref(instructions, i);
+        struct coordinate net_order_target = {
+            .x = htonl(target->x),
+            .y = htonl(target->y)
+        };
+
+        vec_pushn(dat, &net_order_target, sizeof(struct coordinate));
+    }
     
     return;
 }
@@ -238,24 +250,35 @@ void player_update_des(struct message *msg, const struct vector *dat) {
     // of space all the data for a single tank consumes, then dividing the byte
     // stream length by that amount.
     const int element_total_data =
-        sizeof(enum tank_command) + 2*sizeof(struct coordinate);
+        sizeof(enum tank_command) + sizeof(struct coordinate);
 
-    const int num_tanks = vec_len(dat) / element_total_data;
+    const size_t num_tanks = vec_len(dat) / element_total_data;
 
     struct player_update* msg_data = &msg->player_update;
+    
+    // copy tank commands into message.
+    // since tank_commands are only one byte, no endianness conversion is
+    // necessary.
+    vec_pushn(msg_data->tank_instructions, vec_ref(dat, 0), num_tanks);
 
-    // this will point to the array that needs to be copied into each vector.
-    // The cast tells the compiler that its OK get a non-const reference to
-    // const data here.
-    const uint8_t* data_array = vec_dat((struct vector*)dat);
-    
-    vec_pushn(msg_data->tank_instructions, data_array, num_tanks);
-    data_array += vec_element_len(msg_data->tank_instructions) * num_tanks;
-    
-    vec_pushn(msg_data->tank_position_coords, data_array, num_tanks);
-    data_array += vec_element_len(msg_data->tank_position_coords) * num_tanks;
-    
-    vec_pushn(msg_data->tank_target_coords, data_array, num_tanks);
+    // copy data from network to a message object.  Converts from network order
+    // to host order.
+    for (size_t i = 0; i < num_tanks; i++) {
+        const size_t targets_offset = num_tanks * sizeof(uint8_t);
+        
+        struct coordinate* net_order_target = vec_ref(dat, i + targets_offset);
+        struct coordinate host_order_target = {
+            .x = ntohl(net_order_target->x),
+            .y = ntohl(net_order_target->y)
+        };
+
+        vec_push(msg_data->tank_target_coords, &host_order_target);
+    }
+        
+    // copy tank targets into message
+    vec_pushn(msg_data->tank_target_coords,
+              vec_ref(dat, sizeof(enum tank_command)*num_tanks),
+              num_tanks);
 
     return;
 }
@@ -263,7 +286,6 @@ void player_update_init(struct message *msg) {
     // allocate members of the struct
     msg->player_update = (struct player_update) {
         .tank_instructions =    make_vector(sizeof(enum tank_command), 30),
-        .tank_position_coords = make_vector(sizeof(struct coordinate), 30),
         .tank_target_coords =   make_vector(sizeof(struct coordinate), 30)
     };
     return;    
@@ -271,7 +293,6 @@ void player_update_init(struct message *msg) {
 void player_update_free(struct message *msg) {
     struct player_update* player_update = &msg->player_update;
     free_vector(player_update->tank_instructions);
-    free_vector(player_update->tank_position_coords);
     free_vector(player_update->tank_target_coords);
 
     memset(player_update, 0, sizeof(struct player_update));

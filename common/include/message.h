@@ -13,27 +13,32 @@
 /// Response messages are generally SUCCESS, FAIL, or INVALID.
 /// These messages include display/status text in the message body.
 enum message_type {
-    // IDLE STATE REQUESTS
-    MSG_REQUEST_AUTHENTICATE,
-    
-    // LOBBY STATE REQUESTS
-    MSG_REQUEST_LIST_SCENARIOS,
-    MSG_REQUEST_CREATE_SCENARIO,
-    MSG_REQUEST_JOIN_SCENARIO,
-    
-    // SCENARIO STATE REQUESTS
-    MSG_REQUEST_PLAYER_UPDATE,
-    MSG_REQUEST_DEBUG,
-    MSG_REQUEST_RETURN_TO_LOBBY,
+  // IDLE STATE REQUESTS
+  MSG_REQUEST_AUTHENTICATE = 0x00,
 
-    // RESPONSES
-    MSG_RESPONSE_SCENARIO_TICK,
+  // LOBBY STATE REQUESTS
+  MSG_REQUEST_LIST_SCENARIOS,
+  MSG_REQUEST_CREATE_SCENARIO,
+  MSG_REQUEST_JOIN_SCENARIO,
 
-    MSG_RESPONSE_SUCCESS,
-    MSG_RESPONSE_FAIL,
-    MSG_RESPONSE_INVALID_REQUEST,
+  // SCENARIO STATE REQUESTS
+  MSG_REQUEST_PLAYER_UPDATE,
+  MSG_REQUEST_RETURN_TO_LOBBY,
 
-    MSG_NULL,
+  // MISC REQUESTS
+  MSG_REQUEST_DEBUG,
+  MSG_REQUEST_NULL, // not an actual message type
+
+  // RESPONSES
+  MSG_RESPONSE_SCENARIO_TICK = 0x80,
+
+  MSG_RESPONSE_SUCCESS,
+  MSG_RESPONSE_FAIL,
+  MSG_RESPONSE_INVALID_REQUEST,
+
+  MSG_RESPONSE_NULL, // not an actual message type
+  
+  MSG_NULL ,
 };
 
 /* MESSAGE_FNS
@@ -84,7 +89,6 @@ struct coordinate {
 };
 
 struct player_update {
-    struct vector* tank_position_coords;
     struct vector* tank_target_coords;
     struct vector* tank_instructions;
 };

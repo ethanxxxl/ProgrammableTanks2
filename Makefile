@@ -6,7 +6,7 @@
 # @version 0.1
 
 CC = clang
-CFLAGS = -Wall -Wextra -Werror -Wunused-result -pedantic -ftrapv -std=gnu17 -g3 -O0
+CFLAGS = -Wall -Wextra -Werror -Wunused-result -pedantic -ftrapv -std=gnu2x -g3 -O0
 
 BUILDDIR = target
 

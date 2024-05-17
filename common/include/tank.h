@@ -1,10 +1,12 @@
 #ifndef TANK_H
 #define TANK_H
 
+#include <stdint.h>
+
 /// this file simply provides tank definitions for use across both the
 /// server and client.
 
-enum tank_command {
+enum tank_command: uint8_t {
     TANK_MOVE,
     TANK_FIRE,
     TANK_HEAL,
