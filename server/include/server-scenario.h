@@ -1,9 +1,10 @@
-#ifndef SCENARIO_H
-#define SCENARIO_H
+#ifndef SERVER_SCENARIO_H
+#define SERVER_SCENARIO_H
+
+#include "scenario.h"
 
 #include <player_manager.h>
 #include <vector.h>
-#include <tank.h>
 
 // the global scenario
 extern struct scenario g_scenario;
@@ -20,20 +21,20 @@ struct scenario_map {
 };
 
 #define TANKS_IN_SCENARIO 36
-struct actor {
-    struct player_manager *player;
-    enum SCENARIO_OBJECTIVES objective;
-    struct tank tanks[TANKS_IN_SCENARIO];
-};
+/* struct actor { */
+/*     struct player_manager *player; */
+/*     enum SCENARIO_OBJECTIVES objective; */
+/*     struct tank tanks[TANKS_IN_SCENARIO]; */
+/* }; */
 
 /* Scenario manager structure for now, objectives will be fixed and
    maps will be plain, (ie nonexistant)
 
-   FIXME vector is now a pointer! this will need to be updated!
  */
 struct scenario {
     struct scenario_map map;
-    struct vector* actors;
+    struct vector* players;
+    struct vector* player_managers;
     float tick_rate;
     int tick_number;
 };
@@ -47,8 +48,8 @@ int free_scenario(const struct scenario *scene);
 int scenario_add_player(struct scenario *scene, struct player_manager *player);
 int scenario_rem_player(struct scenario *scene, struct player_manager *player);
 
-struct actor *scenario_find_actor(struct scenario *scene,
-                                  struct player_manager *player);
+struct player_data* scenario_find_player(struct scenario *scene,
+                                         struct player_manager *player);
 
 /// Runs updates on everything in the scenario:
 ///  tank health

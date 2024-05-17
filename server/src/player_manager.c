@@ -1,7 +1,10 @@
+#include "player_manager.h"
+#include "server-scenario.h"
+
 #include "scenario.h"
-#include <SDL2/SDL_shape.h>
+#include "message.h"
+
 #include <player_manager.h>
-#include <message.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -100,23 +103,20 @@ int player_scenario_handler(struct player_manager *p, struct message msg) {
             num_tanks = TANKS_IN_SCENARIO;
 
         for (int t = 0; t < num_tanks; t++) {
-            struct actor *actor = scenario_find_actor(&g_scenario, p);
+            struct player_data* player = scenario_find_player(&g_scenario, p);
 
-            struct coordinate move_to;
-            struct coordinate aim_at;
+            struct coord target;
             enum tank_command command;
             
-            vec_at(body.tank_position_coords, t, &move_to);
-            vec_at(body.tank_target_coords, t, &aim_at);
+            vec_at(body.tank_target_coords, t, &target);
             vec_at(body.tank_instructions, t, &command);           
 
-            struct tank *tank = &actor->tanks[t];
+            struct tank* tank = vec_ref(player->tanks, t);
 
-            tank->move_to_x = move_to.x;
-            tank->move_to_y = move_to.y;
-
-            tank->aim_at_x = aim_at.x;
-            tank->aim_at_y = aim_at.y;
+            if (command == TANK_MOVE)
+                tank->move_to = target;
+            else if (command == TANK_FIRE)
+                tank->aim_at = target;
 
             tank->cmd = command;
         }

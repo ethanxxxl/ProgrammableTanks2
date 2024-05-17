@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include "scenario.h"
+#include "server-scenario.h"
 #include "unit-test.h"
 #include "message.h"
 
@@ -12,6 +13,8 @@ struct scenario g_scenario;
 
 // data-carrying message types.
 const char* tst_text_msg_serde(void) {
+    
+
     return TEST_NOT_IMPLEMENTED_ERROR;
 }
 const char* tst_user_credentials_serde(void) {

@@ -37,7 +37,7 @@ struct player_manager {
     struct ringbuffer to_scenario;
 };
 
-int make_player(struct player_manager *p);
+int make_player_manager(struct player_manager *p);
 void print_player(struct player_manager *p);
 
 // recieves player messages from the network, sends them to the

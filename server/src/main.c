@@ -3,6 +3,7 @@
 #include "server-commands.h"
 
 #include "scenario.h"
+#include "server-scenario.h"
 #include "message.h"
 
 #include <stddef.h>

@@ -1,5 +1,10 @@
+#include "message.h"
+#include "scenario.h"
+#include "vector.h"
+#include "nonstdint.h"
+
+
 #include <fcntl.h>
-#include <message.h>
 #include <netinet/in.h>
 #include <stdbool.h>
 #include <stddef.h>
@@ -7,8 +12,6 @@
 #include <stdio.h>
 #include <string.h>
 #include <sys/socket.h>
-#include <vector.h>
-#include <tank.h>
 
 void print_hex(const void *data, size_t len) {
     for (char *c = (char *)data, i = 1; c < (char *)data + len; c++, i++) {
@@ -233,13 +236,13 @@ void player_update_ser(const struct message *msg, struct vector *dat) {
 
     // convert each element in the data stream to network order
     for (size_t i = 0; i < vec_len(target_coords); i++) {
-        struct coordinate* target = vec_ref(instructions, i);
-        struct coordinate net_order_target = {
+        struct coord* target = vec_ref(instructions, i);
+        struct coord net_order_target = {
             .x = htonl(target->x),
             .y = htonl(target->y)
         };
 
-        vec_pushn(dat, &net_order_target, sizeof(struct coordinate));
+        vec_pushn(dat, &net_order_target, sizeof(struct coord));
     }
     
     return;
@@ -250,7 +253,7 @@ void player_update_des(struct message *msg, const struct vector *dat) {
     // of space all the data for a single tank consumes, then dividing the byte
     // stream length by that amount.
     const int element_total_data =
-        sizeof(enum tank_command) + sizeof(struct coordinate);
+        sizeof(enum tank_command) + sizeof(struct coord);
 
     const size_t num_tanks = vec_len(dat) / element_total_data;
 
@@ -266,8 +269,8 @@ void player_update_des(struct message *msg, const struct vector *dat) {
     for (size_t i = 0; i < num_tanks; i++) {
         const size_t targets_offset = num_tanks * sizeof(uint8_t);
         
-        struct coordinate* net_order_target = vec_ref(dat, i + targets_offset);
-        struct coordinate host_order_target = {
+        struct coord* net_order_target = vec_ref(dat, i + targets_offset);
+        struct coord host_order_target = {
             .x = ntohl(net_order_target->x),
             .y = ntohl(net_order_target->y)
         };
@@ -286,7 +289,7 @@ void player_update_init(struct message *msg) {
     // allocate members of the struct
     msg->player_update = (struct player_update) {
         .tank_instructions =    make_vector(sizeof(enum tank_command), 30),
-        .tank_target_coords =   make_vector(sizeof(struct coordinate), 30)
+        .tank_target_coords =   make_vector(sizeof(struct coord), 30)
     };
     return;    
 }
@@ -300,103 +303,110 @@ void player_update_free(struct message *msg) {
 }
 
 /* SCENARIO_TICK
- *
- * the server sends this to the player at regular intervals.
- *
- * this message is encoded in the following format:
- * { num_players, num-tanks, usernames, tank_pos }
- * where num players are null terminated c-strings. there are num_players of
- * them.
  */
 void scenario_tick_ser(const struct message *msg, struct vector *dat) {
-    // do a sanity check first
-    struct vector* usernames = msg->scenario_tick.username_vecs;
-    struct vector* tanks_pos = msg->scenario_tick.tank_positions;
+    struct vector* players_data = msg->scenario_tick.players_public_data;
 
-    if (vec_len(usernames) != vec_len(tanks_pos))
-        return; // FIXME this should be a return -1;
-
-    // NUM_PLAYERS
-    const uint8_t num_players = vec_len(usernames);
-
-    vec_push(dat, &num_players);
-    
-    // NUM TANKS
-    struct vector* first_tank_vec;
-    vec_at(tanks_pos, 0, &first_tank_vec);
-    const uint8_t num_tanks = vec_len(first_tank_vec) / vec_len(usernames);
-    vec_push(dat, &num_tanks);
-
-    // USERNAMES
-    for (int n = 0; n < num_players; n++) {
-        struct vector *username = vec_ref(usernames, n);
-        vec_concat(dat, username);
+    // USERNAMES section
+    for (size_t i = 0; i < vec_len(players_data); i++) {
+        struct player_public_data* player = vec_ref(players_data, i);
+        vec_pushn(dat, vec_dat(player->username), vec_len(player->username));
+        vec_push(dat, ",");
     }
 
-    // TANKS
-    for (int n = 0; n < num_players; n++) {
-        struct vector *tank_vec = vec_ref(tanks_pos, n);
-        vec_concat(dat, tank_vec);
+    // change last ',' to a '\0'
+    vec_pop(dat, NULL);
+    vec_push(dat, "\0");
+
+    // NUM_TANKS section
+    for (size_t i = 0; i < vec_len(players_data); i++) {
+        struct player_public_data* player = vec_ref(players_data, i);
+        u32 num_tanks_host = vec_len(player->tank_positions);
+        u32 num_tanks_net = htonl(num_tanks_host);
+
+        vec_pushn(dat, &num_tanks_net, sizeof(u32));
+    }
+
+    // TANK_POSITIONS section
+    for (size_t i = 0; i < vec_len(players_data); i++) {
+        struct player_public_data* player = vec_ref(players_data, i);
+
+        for (size_t t = 0; t < vec_len(player->tank_positions); t++) {
+            struct coord* pos_host = vec_ref(player->tank_positions, t);
+            struct coord pos_net = {
+                .x = htonl(pos_host->x),
+                .y = htonl(pos_host->y)
+            };
+            
+            vec_pushn(dat, &pos_net, sizeof(struct coord));
+        }
     }
 
     return;
 }
+
 void scenario_tick_des(struct message *msg, const struct vector *dat) {
-    // NUM PLAYERS
-    uint8_t num_players;
-    vec_at(dat, 0, &num_players);
+    struct vector* players_data = msg->scenario_tick.players_public_data;
+    // USERNAMES section
+    size_t num_tanks_offset;
+    for (const char* c = vec_ref(dat, 0); *c != '\0'; c++) {
+        const char* c_end = c;
+        while (*c_end != ',' && *c_end != '\0') c++;
 
-    // NUM TANKS
-    uint8_t num_tanks;
-    vec_at(dat, 1, &num_tanks);
+        // initialize new player
+        struct player_public_data p = make_player_public_data();
 
-    const uint8_t* const dat_data = (const uint8_t *)vec_dat((struct vector*)dat);
-    const uint8_t* data_start = dat_data + sizeof(uint8_t) * 2;
-    const uint8_t* const data_end = dat_data + (vec_len(dat) * vec_element_len(dat));
-
-    // USERNAMES
-    for (int n = 0; n < num_players; n++) {
-        // get length of string including null terminator
-        size_t name_len = strnlen((char *)data_start, data_end - data_start) + 1;
+        vec_pushn(p.username, c, c_end-c); // copy username
+        vec_push(players_data, &p);        // push player data onto vector
         
-        struct vector* username = make_vector(sizeof(char), name_len);
-        vec_pushn(username, data_start, name_len);
-
-        data_start += name_len;
+        num_tanks_offset = c_end - c;
         
-        vec_push(msg->scenario_tick.username_vecs, &username);
     }
 
-    // TANKS
-    for (int t = 0; t < num_players; t++) {
-        struct vector* tank_positions = make_vector(sizeof(struct coordinate), 30);
+    size_t num_players = vec_len(players_data);
+    size_t tank_positions_offset = num_tanks_offset + sizeof(u32)*num_players;
 
-        vec_pushn(tank_positions, data_start, num_tanks);
-        data_start += sizeof(struct coordinate) * num_tanks;
+    
+    // TANK POSITIONS section
+    for (size_t i = 0; i < num_players; i++) {
+        struct player_public_data* p = vec_ref(players_data, i);
 
-        vec_push(msg->scenario_tick.tank_positions, &tank_positions);
+        // find the number of tanks from the NUM TANKS section
+        u32 player_num_tanks = *(u32*)vec_ref(players_data, num_tanks_offset);
+
+        // convert endianness and copy positions into array
+        for (size_t t = 0; t < player_num_tanks; t++) {
+            struct coord* net_order_pos =
+                vec_ref(players_data, tank_positions_offset + t);
+
+            struct coord host_order_pos = {
+                .x = ntohl(net_order_pos->x),
+                .y = ntohl(net_order_pos->y)
+            };
+
+            vec_push(p->tank_positions, &host_order_pos);
+        }
+
+        // make the position offset start at the next players tanks
+        tank_positions_offset += sizeof(struct coord) * player_num_tanks;
     }
 }
 void scenario_tick_init(struct message *msg) {
-    msg->scenario_tick.username_vecs = make_vector(sizeof(struct vector*), 5);
-    msg->scenario_tick.tank_positions = make_vector(sizeof(struct vector*), 5);
+    msg->scenario_tick.players_public_data =
+        make_vector(sizeof(struct player_public_data), 5);
+
     return;
 }
 void scenario_tick_free(struct message *msg) {
-    // gotta free all them strings...
-    for (size_t n = 0; n < vec_len(msg->scenario_tick.username_vecs); n++) {
-        struct vector *name_str = vec_ref(msg->scenario_tick.username_vecs, n);
-        free_vector(name_str);
+    struct vector* players_data = msg->scenario_tick.players_public_data;
+
+    // free every object in the vector
+    for (size_t i = 0; i < vec_len(players_data); i++) {
+        free_player_public_data(vec_ref(players_data, i));
     }
 
-    for (size_t n = 0; n < vec_len(msg->scenario_tick.tank_positions); n++) {
-        struct vector *tank_vec = vec_ref(msg->scenario_tick.tank_positions, n);
-        free_vector(tank_vec);
-    }
-
-    free_vector(msg->scenario_tick.username_vecs);
-    free_vector(msg->scenario_tick.tank_positions);
-
+    // free the vector storing players data.
+    free_vector(players_data);
     return;
 }
 
@@ -434,14 +444,15 @@ void print_message(struct message msg) {
         break;
 
     case MSG_RESPONSE_SCENARIO_TICK:
-        printf(" [users] [%zu]\n", vec_len(msg.scenario_tick.username_vecs));
-        for (size_t i = 0; i < vec_len(msg.scenario_tick.username_vecs); i++) {
-            struct vector* username =
-                vec_ref(msg.scenario_tick.username_vecs, i);
-            printf("   %s\n\n", (char*)vec_dat(username));
+        
+        printf(" [users] [%zu]\n", vec_len(msg.scenario_tick.players_public_data));
+        for (size_t i = 0; i < vec_len(msg.scenario_tick.players_public_data); i++) {
+            struct player_public_data* player =
+                vec_ref(msg.scenario_tick.players_public_data, i);
+            
+            printf("   %s\n\n", (char*)vec_dat(player->username));
         }
 
-        printf(" [tanks] %zu\n", vec_len(msg.scenario_tick.tank_positions));
         break;
     default:
         break;

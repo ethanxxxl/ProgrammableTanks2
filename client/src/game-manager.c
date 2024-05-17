@@ -1,6 +1,6 @@
 #include "game-manager.h"
 #include "message.h"
-#include "tank.h"
+#include "scenario.h"
 
 #include <string.h>
 

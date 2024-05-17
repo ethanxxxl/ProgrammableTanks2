@@ -3,7 +3,7 @@
 
 #include "vector.h"
 #include "message.h"
-#include "tank.h"
+#include "scenario.h"
 
 #include <stdbool.h>
 

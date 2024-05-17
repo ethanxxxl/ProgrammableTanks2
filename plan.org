@@ -157,7 +157,7 @@
       + src/
 
     really what you are doing here is just creating multiple binaries and a
-    couple libraries.  I like option 2 better.
+    couple of libraries.  I like option 2 better.
     
 ** Connection Manager
    The initial layer is where incoming connections and data packets are received
@@ -282,21 +282,20 @@
    |           0x83 | RESPONSE_INVALID_REQUEST |
 
 *** RESPONSE_SCENARIO_TICK
-    In a particular scenario, all connected clients will will periodically
-    recieve this message.  This ~SCENARIO_TICK~ message indicates that a turn in
-    the scenario has passed, and the next one is beginning.  The tick message
-    will also include a copy of the scenario state.
+    In a particular scenario, all connected clients will periodically receive
+    this message.  This ~SCENARIO_TICK~ message indicates that a turn in the
+    scenario has passed, and the next one is beginning.  The tick message will
+    also include a copy of the scenario state.
     
     /in future iterations of this specification, it may be necessary to limit
     how much information is sent.  It may be unnecessary to send a complete
-    snapshot of everything in the secnario.  Only an update of what has changed
+    snapshot of everything in the scenario.  Only an update of what has changed
     since the previous tick may be required./
 
-    the body of a ~SCENARIO_TICK~ will consist of four /sections/ in the
+    the body of a ~SCENARIO_TICK~ will consist of three /sections/ in the
     following order:
     - USERNAMES
     - NUM_TANKS
-    - TANK_STATES
     - TANK_POSITIONS
 
     Each /section/ will consist of N /entries/.  N is determined by the number
@@ -304,7 +303,8 @@
 
     The USERNAMES section will consist of ASCII usernames separated by commas.
     As previously mentioned, the number of usernames in this section determines
-    the number of entries in subsequent sections.
+    the number of entries in subsequent sections.  This section will be
+    terminated by a null character '\0'.
 
     for example, a valid USERNAMES section for a scene with four users will look
     like this:
@@ -313,22 +313,18 @@
 
     The next section, NUM_TANKS, specifies how many tanks are associated with
     each user.  There will be N entries in this section.  Each entry will be a
-    32-bit integer (big endian).  Continuing with the previous example, a valid
+    32-bit integer (big-endian).  Continuing with the previous example, a valid
     NUM_TANKS section may be seen as follows:
 
     | bytes     | 0-3 | 4-7 | 8-11 | 12-15 |
     | NUM_TANKS |   5 |   5 |    8 |     8 |
 
-    The next two sections, TANK_STATES and TANK_POSITIONS, consist of N entries,
-    where each entry is a list of /data points/ related to the tank at that
-    index.  Simply put, each /data point/ describes a tank that belongs to a
-    user.
-
-    In this iteration of the specificaion, the TANK_STATES section is reserved
-    for future use.
+    The next section, TANK_POSITIONS, consists of N entries, where each entry is
+    a list of /data points/ related to the tank at that index.  Simply put, each
+    /data point/ describes a tank that belongs to a user.
 
     As previously described, the TANK_POSITIONS section contains N entries.
-    Each entry is a list of data points which describe the position of the tank
+    Each entry is a list of data points that describe the position of the tank
     being indexed.  A tank position data point consists of an x and y value,
     each 32 bits in size.  Thus each data point will be 64 bits in length
     
@@ -376,7 +372,7 @@
      than hardcoding it in the C source.
 
 ** TODO Server Admin Tweaks
-   These are additions that will flesh out the the server.
+   These are additions that will flesh out the server.
    
 *** DONE Command Line Input
     CLOSED: [2024-05-14 Tue 13:02]
@@ -392,7 +388,7 @@
     - [X] help
       
 *** TODO Logging
-    Add logging to fascilitate debugging.  You should log things such as:
+    Add logging to facilitate debugging.  You should log things such as:
     - accepted connections.
     - messages recieved
     - integrity checks
@@ -402,7 +398,12 @@
   for a lot of things.  It is confusing what type is contained in a vector.
   Maybe some typedefs may be helpful?
   
-** TODO [#A] update networking specification
+** TODO [#A] Message Functions (All)
+   [2024-05-12 Sun]
+   - [ ] write unit tests
+   - [ ] write documentation
+
+** DOCUMENT [#A] update networking specification
    update the message functions to reflect what you have written in this
    document for the networking specification.
 
@@ -411,16 +412,23 @@
      + [X] deserialize
      + [X] init
      + [X] free
-   - [0/4] scenario_tick functions
-     + [ ] serialize
-     + [ ] deserialize
-     + [ ] init
-     + [ ] free
-** TODO [#A] Message Functions (All)
-   [2024-05-12 Sun]
-   - [ ] write unit tests
-   - [ ] write documentation
+   - [4/4] scenario_tick functions
+     + [X] serialize
+     + [X] deserialize
+     + [X] init
+     + [X] free
 
+*** TODO Implement new functions in ~scenario.h~ [0/5]
+    - [ ] make_player_data
+    - [ ] free_player_data
+    - [ ] make_player_public_data
+    - [ ] player_public_data_get
+    - [ ] free_player_public_data
+      
+*** TODO write unit tests for message functions
+    - [ ] scenario_tick
+    - [ ] player_update
+    
 ** TODO [#B] vec_byte_ref
    - [ ] write documentation
    - [ ] unit test
@@ -429,7 +437,21 @@
    - [ ] write documentation
    - [ ] unit test
 
-** TODO [#B] vector types
+** DONE [#B] Sort out game data in the common headers
+   CLOSED: [2024-05-17 Fri 01:09]
+   [2024-05-13 Mon] Move game-related header information, such as tank data,
+   position coordinates, etc to a separate file.  Translation units that depend
+   on game data but do not send messages to the server shouldn't have to include
+   the whole networking stack.
+
+   [2024-05-16 Thu] Additionally, make a standardized header file for player
+   information.  Players can have public data, private data, etc.
+
+** DONE Cleanup Client
+   CLOSED: [2024-05-13 Mon 22:11]
+   [2024-05-12 Sun] Split the client up into functional units
+   
+** TODO [#C] vector types
    It is frustrating working with vectors that have a seemingly unknown type
    whenever you declare them.
 
@@ -466,16 +488,6 @@
 
    #+RESULTS:
    : 0 1 2 3 4 5 6 7 8 9
-
-** DONE Cleanup Client
-   CLOSED: [2024-05-13 Mon 22:11]
-   [2024-05-12 Sun] Split the client up into functional units
-   
-** TODO [#C] Sort out game data in the common headers
-   [2024-05-13 Mon] Move game-related header information, such as tank data,
-   position coordinates, etc to a separate file.  Translation units that depend
-   on game data but do not send messages to the server shouldn't have to include
-   the whole networking stack.
 
 * Bug Fix List
 ** TODO ~connect~ command

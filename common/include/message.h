@@ -1,6 +1,8 @@
 #ifndef MESSAGE_H
 #define MESSAGE_H
 
+#include "scenario.h"
+
 #include <stdint.h>
 #include <vector.h>
 
@@ -84,9 +86,6 @@ void user_credentials_free(struct message *);
  *       is unchanged since the last tick. At some point, you may want to
  *       consider optimizing this message for space.
  */
-struct coordinate {
-    int x, y;
-};
 
 struct player_update {
     struct vector* tank_target_coords;
@@ -102,9 +101,6 @@ void player_update_free(struct message *msg);
  * the server sends this to the player at regular intervals
  * includes each players username, and the position of all their tanks.
  *
- * INFO: the usernames vector is a vector of vectors (we don't know how long a
- *       username might be)
-
  * TODO: including all the usernames is a bit wasteful, but it was the easiest
  *       way to get the ball rolling on this thing. Implement some more
  *       state-based requests for the client.
@@ -115,12 +111,22 @@ void player_update_free(struct message *msg);
  *       is unchanged since the last tick. At some point, you may want to
  *       consider optimizing this message for space.
  */
+
+/* SCENARIO_TICK
+ *
+ * main message body structure.
+ *  
+ */
 struct scenario_tick {
-    struct vector* username_vecs;
-    // TODO: struct vector* user_tasks ??
-    struct vector* tank_positions;
+    /** vector of type `struct player_public_data`
+     */
+    struct vector* players_public_data;
 };
+
 void scenario_tick_ser(const struct message *msg, struct vector *dat);
+
+/** deserializes the message encoded in dat.  Remember, msg needs to be
+    initialized before it is passed into this function. */
 void scenario_tick_des(struct message *msg, const struct vector *dat);
 void scenario_tick_init(struct message *msg);
 void scenario_tick_free(struct message *msg);

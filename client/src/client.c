@@ -4,7 +4,7 @@
 #include "game-manager.h"
 
 /* Project Library Includes */
-#include "tank.h"
+#include "scenario.h"
 #include "vector.h"
 #include "message.h"
 #include "command-line.h"
@@ -27,7 +27,7 @@
 /* GLOBAL VARIABLES
  */
 
-struct coordinate coord;
+struct coord coord;
 
 pthread_t g_gfx_pid;
 pthread_t g_read_msg_pid;

@@ -4,7 +4,7 @@
 
 #include "message.h"
 #include "vector.h"
-#include "tank.h"
+#include "scenario.h"
 
 #include <arpa/inet.h>
 #include <fcntl.h>
