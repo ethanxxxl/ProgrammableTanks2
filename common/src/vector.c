@@ -224,3 +224,10 @@ int vec_concat(struct vector* vec, const struct vector* src) {
     vec_pushn(vec, src->data, src->len);
     return 0;
 }
+
+void* vec_end(const struct vector* vec) {
+    if (vec == NULL)
+        return NULL;
+
+    return (uint8_t*)vec->data + (vec->len - 1) * vec->element_len;
+}

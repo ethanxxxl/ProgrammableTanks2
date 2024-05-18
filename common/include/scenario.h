@@ -55,7 +55,7 @@ struct player_public_data {
 };
 
 struct player_public_data make_player_public_data();
-struct player_public_data player_public_data_get(const struct player_data *);
+struct player_public_data player_public_data_get(const struct player_data*);
 void free_player_public_data(struct player_public_data*);
 
 #endif

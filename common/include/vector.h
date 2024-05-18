@@ -157,6 +157,15 @@ int vec_at(const struct vector* vec, size_t n, void* dst);
 void* vec_ref(const struct vector* vec, size_t n);
 
 /**
+ * Returns a reference to the last element in the vector.
+ * 
+ * @param[in] vec the vector to obtain a reference too.
+ *
+ * @return a pointer to hte last element in the vector.
+ */
+void* vec_end(const struct vector* vec);
+
+/**
  * similar to `vec_ref` but with a byte offset rather than an index.*/
 void* vec_byte_ref(const struct vector* vec, size_t offset);
 

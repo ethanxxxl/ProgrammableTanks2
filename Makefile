@@ -11,10 +11,10 @@ CFLAGS = -Wall -Wextra -Werror -Wunused-result -pedantic -ftrapv -std=gnu2x -g3 
 BUILDDIR = target
 
 COMMON_DIR = common/src
-SRC_COMMON = message.c vector.c command-line.c
+SRC_COMMON = message.c vector.c command-line.c scenario.c
 
 SERVER_DIR = server/src
-SRC_SERVER = main.c scenario.c player_manager.c server-commands.c
+SRC_SERVER = main.c server-scenario.c player_manager.c server-commands.c
 
 CLIENT_DIR = client/src
 SRC_CLIENT = client.c client-commands.c client-gfx.c game-manager.c

@@ -403,7 +403,7 @@
    - [ ] write unit tests
    - [ ] write documentation
 
-** DOCUMENT [#A] update networking specification
+** STARTED [#A] update networking specification
    update the message functions to reflect what you have written in this
    document for the networking specification.
 
@@ -418,12 +418,12 @@
      + [X] init
      + [X] free
 
-*** TODO Implement new functions in ~scenario.h~ [0/5]
-    - [ ] make_player_data
-    - [ ] free_player_data
-    - [ ] make_player_public_data
-    - [ ] player_public_data_get
-    - [ ] free_player_public_data
+*** DOCUMENT Implement new functions in ~scenario.h~ [5/5]
+    - [X] make_player_data
+    - [X] free_player_data
+    - [X] make_player_public_data
+    - [X] player_public_data_get
+    - [X] free_player_public_data
       
 *** TODO write unit tests for message functions
     - [ ] scenario_tick
@@ -529,3 +529,4 @@
    [2024-05-12 Sun] Messages are constructed using host order, little endian.  They need to be
    sent in network order, big endian.
 
+   
