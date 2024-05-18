@@ -153,7 +153,7 @@ void *gfx_thread(void *arg) {
             for (size_t t = 0; t < vec_len(player->tanks); t++) {
                 struct tank tank;
                 vec_at(player->tanks, t, &tank);
-                gfx_draw_tank(renderer, &camera, &tile, grid_spacing, tank.x, tank.y);
+                gfx_draw_tank(renderer, &camera, &tile, grid_spacing, tank.pos.x, tank.pos.y);
             }
         }
         

@@ -53,15 +53,12 @@ void *read_msg_thread(void *arg) {
 
         switch (msg.type) {
         case MSG_RESPONSE_SCENARIO_TICK: {
-
             struct scenario_tick body = msg.scenario_tick;
-            for (size_t u = 0; u < vec_len(body.username_vecs); u++) {
-                char *username =
-                    vec_dat(((struct vector *)vec_ref(body.username_vecs, u)));
 
-                struct vector *tanks = vec_ref(body.tank_positions, u);
-               
-                players_update_player(username, tanks);
+            struct player_public_data* pd = vec_dat(body.players_public_data);
+            struct player_public_data* end = vec_end(body.players_public_data);
+            for (; pd <= end; pd++) {
+                players_update_player(vec_dat(pd->username), pd->tank_positions);
             }
         } break;            
         default:
@@ -174,8 +171,8 @@ void update_tank(int argc, char **argv) {
     }
     
     struct tank* tank = vec_ref(player.tanks, index);
-    tank->move_to_x = x;
-    tank->move_to_y = y;
+    tank->move_to.x = x;
+    tank->move_to.y = y;
     return;
  }
 
@@ -202,11 +199,9 @@ void propose_update(int argc, char **argv) {
         vec_at(player.tanks, t, &tank);
         
         enum tank_command cmd = TANK_MOVE;
-        struct coordinate coord = { .x = tank.move_to_x, .y = tank.move_to_y };
            
         vec_push(msg.player_update.tank_instructions, &cmd);
-        vec_push(msg.player_update.tank_target_coords, &coord);
-        vec_push(msg.player_update.tank_position_coords, &coord);
+        vec_push(msg.player_update.tank_target_coords, &tank.move_to);
     }
 
     debug_send_msg(msg);
@@ -222,7 +217,7 @@ void list_tanks(int argc, char **argv) {
         printf("[tanks for %s]\n", player->username);
         for (size_t t = 0; t < vec_len(player->tanks); t++) {
             struct tank *tank = vec_ref(player->tanks, t);
-            printf("  [%zu] x: %d y: %d\n", t, tank->x, tank->y);
+            printf("  [%zu] x: %d y: %d\n", t, tank->pos.x, tank->pos.y);
         }
     }
 }

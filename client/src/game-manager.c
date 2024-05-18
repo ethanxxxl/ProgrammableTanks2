@@ -30,12 +30,8 @@ update_player: ; // can't have a declaration after a label in cstd < c2x
     vec_resize(player->tanks, vec_len(tank_positions));
 
     for (size_t t = 0; t < vec_len(tank_positions); t++) {
-        struct coordinate coord;
-        vec_at(tank_positions, t, &coord);
-
         struct tank *tank = vec_ref(player->tanks, t);
-        tank->x = coord.x;
-        tank->y = coord.y;
+        tank->pos = *(struct coord*)vec_ref(tank_positions, t);
     }
 
     return;
