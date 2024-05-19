@@ -331,6 +331,45 @@
 *** RESPONSE_SUCCESS
 *** RESPONSE_FAIL
 *** RESPONSE_INVALID_REQUEST
+
+* Serialization Specification
+  This is a binary serialization format tailored specifically for this
+  applictation.
+
+  
+** Data Types
+   - strings
+   - integers
+   - lists
+
+   you could implement this serialization format as a subset of s-expressions.
+
+   these have the benefit of not needing to transmit their length.
+   Advantages:
+   - human readable
+   - easy to implement
+
+   Cons:
+   - may use significantly more space than necessary, especially when
+     transmitting integers
+   - may be slow to encode/decode
+
+
+   you might also want to look at *csexps*.  these have every atom prefixed by
+   their length and a colon
+
+   the following csexp...
+   : (5:hello17:this is some data9:there are1:55:sexps)
+   ... maps to the following sexp
+   : (hello |this is some data| |there are| 5 sexps)
+
+   for plain text data, there isn't much of an advantage over the regular sexps.
+   But csexps can encode binary data as well.  after doing some research, it
+   seems that these things were never fully standardized.  I am taking this to
+   mean that I can work with them pretty much however I want. 
+  
+
+
 * Feature List
 ** TODO Multiple Scenarios
    - [ ] The Server can create new scenarios
@@ -534,7 +573,7 @@
    #+RESULTS:
    : 0 1 2 3 4 5 6 7 8 9
 
-** TODO [#C] Consider using an OTS serialization solution
+** TODO [#A] implement a form of csexps
    You can also consider creating a bespoke serialization format (like you are
    already doing).  Instead of specifying message formats, you would specify
    serialization formats.  Message types would have to conform to that
