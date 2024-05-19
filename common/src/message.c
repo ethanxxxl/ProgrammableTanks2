@@ -84,16 +84,17 @@ int message_send(int fd, const struct message msg) {
 
     struct vector* msg_data = make_vector(sizeof(u8), 10);
 
-    vec_pushn(msg_data, &header, sizeof(struct message_header));
+    vec_pushn(msg_data, &header.type, sizeof(u8));
+    vec_pushn(msg_data, &header.body_len, sizeof(u32));
 
     if (g_message_funcs[msg.type] != NULL) {
         g_message_funcs[msg.type]->message_ser(&msg, msg_data);
-        header.body_len = vec_len(msg_data) - sizeof(struct message_header);
+        header.body_len = vec_len(msg_data) - MESSAGE_HEADER_SER_SIZE;
         header.body_len = htonl(header.body_len);
     }
 
     // update the body length in the encoded header.
-    ((struct message_header*)vec_dat(msg_data))->body_len = header.body_len;
+    *(u32*)vec_byte_ref(msg_data, sizeof(u8)) = header.body_len;
 
     write(fd, vec_dat(msg_data), vec_len(msg_data));
 
@@ -103,17 +104,21 @@ int message_send(int fd, const struct message msg) {
 
 int message_recv(int fd, struct message* msg, struct vector* buf) {
     /* DETERMINE AMOUNT OF DATA TO READ */
+    struct message_header header = {0};
 
     size_t body_size = 0; // amount to read based off of length in header
-    if (vec_len(buf) >= sizeof(struct message_header)) {
-        struct message_header* header = vec_dat(buf);
-        body_size = ntohl(header->body_len);
+    if (vec_len(buf) >= MESSAGE_HEADER_SER_SIZE) {
+        header.type = *(u8*)vec_dat(buf);
+        header.body_len = *(u32*)vec_byte_ref(buf, sizeof(u8));
+        header.body_len = ntohl(header.body_len);
+
+        body_size = header.body_len;
     }
      
-    int read_amnt = vec_len(buf) - sizeof(struct message_header) + body_size;
+    int read_amnt = vec_len(buf) - MESSAGE_HEADER_SER_SIZE + body_size;
 
     if (read_amnt < 0)
-        read_amnt = sizeof(struct message_header); // when vec_len(buf) = 0, then read_ammnt < 0.
+        read_amnt = MESSAGE_HEADER_SER_SIZE; // when vec_len(buf) = 0, then read_ammnt < 0.
 
     /* READ AS MUCH DATA AS POSSIBLE */
     uint8_t tmp[read_amnt];
@@ -125,29 +130,35 @@ int message_recv(int fd, struct message* msg, struct vector* buf) {
     vec_pushn(buf, tmp, bytes_read);
 
     // update body_size to match header data, if able.
-    if (vec_len(buf) >= sizeof(struct message_header)) {
-        struct message_header* header = vec_dat(buf);
-        body_size = ntohl(header->body_len);
+    if (vec_len(buf) >= MESSAGE_HEADER_SER_SIZE) {
+        header.type = *(u8*)vec_dat(buf);
+        header.body_len = *(u32*)vec_byte_ref(buf, sizeof(u8));
+        header.body_len = ntohl(header.body_len);
+        
+        body_size = header.body_len;
     }
 
-    if (vec_len(buf) < sizeof(struct message_header) ||
-        vec_len(buf) < sizeof(struct message_header) + body_size) {
+    if (vec_len(buf) < MESSAGE_HEADER_SER_SIZE ||
+        vec_len(buf) < MESSAGE_HEADER_SER_SIZE + body_size) {
         return -1;
     }
 
     /* CREATE MESSAGE, CLEAR BUFFER */
     *msg = (struct message){0}; // clear out garbage from msg struct.
-    msg->type = *(enum message_type *)vec_dat(buf);
+    msg->type = header.type;
 
-    if (msg->type >= MSG_NULL) {
+
+    if (((msg->type < 0x80) && msg->type >= MSG_REQUEST_NULL) ||
+        (msg->type >= MSG_RESPONSE_NULL)) {
+        
         // the message type is not recognized.  Throw out the message.
         vec_resize(buf, 0);
         printf("received an invalid message!\n");
-        return -1; // message is invalid
+        return -1; // message is invalid        
     }
 
     // remove the header from the vector, so it only contains the body.
-    for (unsigned int i = 0; i < sizeof(struct message_header); i++)
+    for (unsigned int i = 0; i < MESSAGE_HEADER_SER_SIZE; i++)
         vec_rem(buf, 0);
 
     if (g_message_funcs[msg->type] != NULL) {
@@ -166,7 +177,10 @@ int message_send_conf(int fd, enum message_type type, const char *text) {
         type != MSG_RESPONSE_INVALID_REQUEST)
         return -1;
 
-    int header[] = {type, strlen(text)};
+    u8 header[MESSAGE_HEADER_SER_SIZE];
+    *(u8*)header = type;
+    *(u32*)(header+1) = htonl(strlen(text));
+    
     int header_len = send(fd, header, sizeof(header), 0);
     if (header_len < 0)
         return -1;

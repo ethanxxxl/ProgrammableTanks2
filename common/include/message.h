@@ -131,6 +131,7 @@ void scenario_tick_des(struct message *msg, const struct vector *dat);
 void scenario_tick_init(struct message *msg);
 void scenario_tick_free(struct message *msg);
 
+#define MESSAGE_HEADER_SER_SIZE (sizeof(u8) + sizeof(u32))
 struct message_header {
     u8 type;
     u32 body_len;
