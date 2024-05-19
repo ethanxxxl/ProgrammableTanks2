@@ -236,7 +236,7 @@ void player_update_ser(const struct message *msg, struct vector *dat) {
 
     // convert each element in the data stream to network order
     for (size_t i = 0; i < vec_len(target_coords); i++) {
-        struct coord* target = vec_ref(instructions, i);
+        struct coord* target = vec_ref(target_coords, i);
         struct coord net_order_target = {
             .x = htonl(target->x),
             .y = htonl(target->y)
@@ -253,23 +253,23 @@ void player_update_des(struct message *msg, const struct vector *dat) {
     // of space all the data for a single tank consumes, then dividing the byte
     // stream length by that amount.
     const int element_total_data =
-        sizeof(enum tank_command) + sizeof(struct coord);
+        sizeof(u8) + sizeof(struct coord); // tank commands are sent as a u8
 
     const size_t num_tanks = vec_len(dat) / element_total_data;
 
     struct player_update* msg_data = &msg->player_update;
-    
-    // copy tank commands into message.
-    // since tank_commands are only one byte, no endianness conversion is
-    // necessary.
-    vec_pushn(msg_data->tank_instructions, vec_ref(dat, 0), num_tanks);
+
+    for (size_t cmd = 0; cmd < num_tanks; cmd++) {
+        enum tank_command tc = (enum tank_command)*(u8*)vec_ref(dat, cmd);
+        vec_push(msg_data->tank_instructions, &tc);
+    }
 
     // copy data from network to a message object.  Converts from network order
     // to host order.
     for (size_t i = 0; i < num_tanks; i++) {
         const size_t targets_offset = num_tanks * sizeof(uint8_t);
         
-        struct coord* net_order_target = vec_ref(dat, i + targets_offset);
+        struct coord* net_order_target = vec_ref(dat, targets_offset + i*sizeof(struct coord));
         struct coord host_order_target = {
             .x = ntohl(net_order_target->x),
             .y = ntohl(net_order_target->y)
@@ -278,11 +278,6 @@ void player_update_des(struct message *msg, const struct vector *dat) {
         vec_push(msg_data->tank_target_coords, &host_order_target);
     }
         
-    // copy tank targets into message
-    vec_pushn(msg_data->tank_target_coords,
-              vec_ref(dat, sizeof(enum tank_command)*num_tanks),
-              num_tanks);
-
     return;
 }
 void player_update_init(struct message *msg) {

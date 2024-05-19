@@ -25,7 +25,84 @@ const char* tst_user_credentials_serde(void) {
     return TEST_NOT_IMPLEMENTED_ERROR;
 }
 const char* tst_player_update_serde(void) {
-    return TEST_NOT_IMPLEMENTED_ERROR;
+    char* error_msg = NULL;
+
+    vector* commands = make_vector(sizeof(enum tank_command), 30);
+    vector* targets = make_vector(sizeof(struct coord), 30);
+
+    for (size_t i = 0; i < 30; i++) {
+        enum tank_command tc = TANK_FIRE;
+        struct coord pos = {i, 5};
+
+        vec_push(commands, &tc);
+        vec_push(targets, &pos);
+    }
+
+    struct message out_msg;
+    make_message(&out_msg, MSG_REQUEST_PLAYER_UPDATE);
+
+    out_msg.player_update.tank_instructions = commands;
+    out_msg.player_update.tank_target_coords = targets;
+
+    int fd[2];
+    if (pipe(fd) != 0) {
+        error_msg = "couldn't create pipe to sim net traffic";
+        goto free_out_msg;
+    }
+
+    message_send(fd[1], out_msg);
+    close(fd[1]);
+
+    struct message in_msg;
+    struct vector* tmp_buf = make_vector(sizeof(u8), 10);
+    while (message_recv(fd[0], &in_msg, tmp_buf) != 0);
+    free_vector(tmp_buf);
+
+    if (in_msg.type != MSG_REQUEST_PLAYER_UPDATE) {
+        error_msg = "message is the incorrect type";
+        goto free_in_msg;
+    }
+
+    vector* in_commands = in_msg.player_update.tank_instructions;
+    vector* in_targets = in_msg.player_update.tank_target_coords;
+    
+    if (vec_len(in_commands) < vec_len(commands)) {
+        error_msg = "received less commands than sent";
+        goto free_in_msg;
+    } else if (vec_len(in_commands) > vec_len(commands)) {
+        error_msg = "received more commands than sent";
+        goto free_in_msg;        
+    }
+
+    if (memcmp(vec_dat(in_commands),
+               vec_dat(commands),
+               vec_len(commands)) != 0) {
+        error_msg = "commands are not the same";
+        goto free_in_msg;
+    }
+
+    if (vec_len(in_targets) < vec_len(targets)) {
+        error_msg = "received less targets than sent";
+        goto free_in_msg;
+    } else if (vec_len(in_targets) > vec_len(targets)) {
+        error_msg = "received more targets than sent";
+        goto free_in_msg;        
+    }
+
+    if (memcmp(vec_dat(in_targets),
+               vec_dat(targets),
+               vec_len(targets)) != 0) {
+        error_msg = "targets are not the same";
+        goto free_in_msg;
+    }
+
+ free_in_msg:
+    free_message(in_msg);
+
+ free_out_msg:
+    free_message(out_msg);
+    
+    return error_msg;
 }
 const char* tst_scenario_tick_serde(void) {
     char* error_msg = NULL;

@@ -3,7 +3,7 @@
 #+EMAIL: ethansmith.dev@gmail.com
 
 #+STARTUP: logdone overview
-#+TODO: TODO STARTED DOCUMENT | DONE(d)
+#+TODO: TODO STARTED DOCUMENT | DONE
 
 * Overview
   this is my second attempt to create a game/simulation of AI tank combat.
@@ -425,9 +425,9 @@
     - [X] player_public_data_get
     - [X] free_player_public_data
       
-*** TODO write unit tests for message functions
+*** DOCUMENT write unit tests for message functions
     - [X] scenario_tick
-    - [ ] player_update
+    - [X] player_update
 
       I am trying to use pipes to simulate the network connection:
       #+begin_src C
@@ -459,6 +459,18 @@
       former only works on sockets, while the latter will work on either sockets
       or files (supposedly).
     
+*** TODO revamp message headers.
+    currently, there isn't even a structure associated with the message headers.
+    The sizes are hardcoded, and the types aren't clear in the code.
+
+    - [ ] Make a message_header structure
+    - [ ] Update message code to use the header structure
+    - [ ] send header/body in a single write command
+
+    This should be relatively easy to fix.  The message header is only dealt
+    with once per message, not in every type of message (ie in the individual
+    serialize funcitons.)
+      
 ** TODO [#B] vec_byte_ref
    - [ ] write documentation
    - [ ] unit test
