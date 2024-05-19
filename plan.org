@@ -426,8 +426,38 @@
     - [X] free_player_public_data
       
 *** TODO write unit tests for message functions
-    - [ ] scenario_tick
+    - [X] scenario_tick
     - [ ] player_update
+
+      I am trying to use pipes to simulate the network connection:
+      #+begin_src C
+        #include <unistd.h>
+        #include <stdio.h>
+        #include <sys/socket.h>
+
+        int main() {
+            int fd[2];
+            pipe(fd);
+
+            write(fd[1], "hello world!", 13);
+            close(fd[1]);
+
+            char buf[50];
+            read(fd[0], buf, 50);
+
+            printf("i got: %s", buf);
+            close(fd[0]);
+
+            return 0;
+        }
+      #+end_src
+
+      #+RESULTS:
+      : i got: hello world!
+
+      The solution is that ~send/recv~ are different than ~write/read~.  The
+      former only works on sockets, while the latter will work on either sockets
+      or files (supposedly).
     
 ** TODO [#B] vec_byte_ref
    - [ ] write documentation

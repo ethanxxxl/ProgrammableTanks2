@@ -1,7 +1,6 @@
 #include "unit-test.h"
-#include "scenario.h"
-
 #include "vector.h"
+
 #include <limits.h>
 #include <stdint.h>
 #include <string.h>
@@ -11,8 +10,6 @@ const char INIT_FAIL[] = "falled to create vector.";
 // HACK these are externs referenced in scenario.c which are defined in the
 // server translation unit. In order for the tests to compile, they need to
 // provide a defnition for this global variable.
-extern struct scenario g_scenario;
-struct scenario g_scenario;
 
 const char* tst_vec_push(void) {
     int ret;

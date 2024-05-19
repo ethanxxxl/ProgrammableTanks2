@@ -12,6 +12,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <sys/socket.h>
+#include <unistd.h>
 
 void print_hex(const void *data, size_t len) {
     for (char *c = (char *)data, i = 1; c < (char *)data + len; c++, i++) {
@@ -92,8 +93,8 @@ int message_send(int fd, const struct message msg) {
         header.body_len = vec_len(body);
     }
 
-    send(fd, &header, sizeof(header), 0);
-    send(fd, vec_dat(body), vec_len(body), 0);
+    write(fd, &header, sizeof(header));
+    write(fd, vec_dat(body), vec_len(body));
 
     free_vector(body);
     return 0;
@@ -101,7 +102,6 @@ int message_send(int fd, const struct message msg) {
 
 int message_recv(int fd, struct message* msg, struct vector* buf) {
     /* DETERMINE AMOUNT OF DATA TO READ */
-
 
     // FIXME: this should probably be a fixed width integer
     int body_size = 0; // amount to read based off of length in header
@@ -116,7 +116,7 @@ int message_recv(int fd, struct message* msg, struct vector* buf) {
 
     /* READ AS MUCH DATA AS POSSIBLE */
     uint8_t tmp[read_amnt];
-    int bytes_read = recv(fd, tmp, read_amnt, 0);
+    int bytes_read = read(fd, tmp, read_amnt);
 
     if (bytes_read <= 0)
         return -1; // recv can potentially return -1.
@@ -348,10 +348,10 @@ void scenario_tick_ser(const struct message *msg, struct vector *dat) {
 void scenario_tick_des(struct message *msg, const struct vector *dat) {
     struct vector* players_data = msg->scenario_tick.players_public_data;
     // USERNAMES section
-    size_t num_tanks_offset;
+    size_t num_tanks_offset = 0;
     for (const char* c = vec_ref(dat, 0); *c != '\0'; c++) {
         const char* c_end = c;
-        while (*c_end != ',' && *c_end != '\0') c++;
+        while (*c_end != ',' && *c_end != '\0') c_end++;
 
         // initialize new player
         struct player_public_data p = make_player_public_data();
@@ -359,25 +359,25 @@ void scenario_tick_des(struct message *msg, const struct vector *dat) {
         vec_pushn(p.username, c, c_end-c); // copy username
         vec_push(players_data, &p);        // push player data onto vector
         
-        num_tanks_offset = c_end - c;
-        
+        num_tanks_offset += c_end - c + 1; // add one to account for the ','
+        c = c_end;
     }
 
     size_t num_players = vec_len(players_data);
     size_t tank_positions_offset = num_tanks_offset + sizeof(u32)*num_players;
-
     
     // TANK POSITIONS section
     for (size_t i = 0; i < num_players; i++) {
         struct player_public_data* p = vec_ref(players_data, i);
 
         // find the number of tanks from the NUM TANKS section
-        u32 player_num_tanks = *(u32*)vec_ref(players_data, num_tanks_offset);
+        u32 player_num_tanks = *(u32*)vec_ref(dat, num_tanks_offset);
+        player_num_tanks = ntohl(player_num_tanks);
 
         // convert endianness and copy positions into array
         for (size_t t = 0; t < player_num_tanks; t++) {
             struct coord* net_order_pos =
-                vec_ref(players_data, tank_positions_offset + t);
+                vec_ref(dat, tank_positions_offset + t*sizeof(struct coord));
 
             struct coord host_order_pos = {
                 .x = ntohl(net_order_pos->x),

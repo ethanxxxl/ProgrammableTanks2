@@ -149,14 +149,14 @@ struct message {
 int message_send(int fd, const struct message msg);
 int message_send_conf(int fd, enum message_type type, const char *text);
 
-/// recieves a message from the socket. This function is designed to be
-/// non-blocking. requires an initialized vector be supplied to store incomplete
-/// messages between calls.
-///
-/// CREATES A NEW MESSAGE, POTENTIALLY USING MALOC
-///
-/// returns  0 when it fills out `msg`.
-/// returns -1 otherwise
+// recieves a message from the socket. This function is designed to be
+// non-blocking. requires an initialized vector be supplied to store incomplete
+// messages between calls.
+//
+// CREATES A NEW MESSAGE, POTENTIALLY USING MALOC
+//
+// returns  0 when it fills out `msg`.
+// returns -1 otherwise
 int message_recv(int fd, struct message *msg, struct vector *buf);
 
 void print_message(struct message msg);

@@ -72,10 +72,10 @@ test: $(UNIT_TESTS)
 # main must be filtered out in the recipe.
 #
 # for the prerequisites, we filter out the mains from the other normal targets.
-$(UNIT_TESTS): $(filter-out $(OBJ_MAINS),$(OBJ))
+$(UNIT_TESTS): $(OBJ_COMMON) $(OBJ_TESTER)
 	@echo -e "\033[33mcompling test \033[1m$@\033[0m\033[0m"
 	@$(CC) $(CFLAGS) $(LIB) $(INC) -o $@ \
-		$@.o $(filter-out $(OBJ_TESTER) $(OBJ_MAINS),$(OBJ))
+		$@.o $(OBJ_COMMON)
 
 clean:
 	rm -rf $(BUILDDIR)

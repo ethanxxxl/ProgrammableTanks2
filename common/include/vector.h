@@ -12,6 +12,7 @@
  * will automatically reallocate data to fit new elements.
  */
 struct vector;
+typedef struct vector vector;
 
 /**
  * initialize a new vector.
