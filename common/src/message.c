@@ -78,41 +78,42 @@ const struct message_fns* g_message_funcs[] =  {
 };
 
 int message_send(int fd, const struct message msg) {
-    struct {
-        enum message_type t;
-        int body_len;
-    } header = {0};
-
-    header.t = msg.type;
+    struct message_header header;
+    header.type = msg.type;
     header.body_len = 0;
 
-    struct vector* body = make_vector(sizeof(char), 10);
+    struct vector* msg_data = make_vector(sizeof(u8), 10);
+
+    vec_pushn(msg_data, &header, sizeof(struct message_header));
 
     if (g_message_funcs[msg.type] != NULL) {
-        g_message_funcs[msg.type]->message_ser(&msg, body);
-        header.body_len = vec_len(body);
+        g_message_funcs[msg.type]->message_ser(&msg, msg_data);
+        header.body_len = vec_len(msg_data) - sizeof(struct message_header);
+        header.body_len = htonl(header.body_len);
     }
 
-    write(fd, &header, sizeof(header));
-    write(fd, vec_dat(body), vec_len(body));
+    // update the body length in the encoded header.
+    ((struct message_header*)vec_dat(msg_data))->body_len = header.body_len;
 
-    free_vector(body);
+    write(fd, vec_dat(msg_data), vec_len(msg_data));
+
+    free_vector(msg_data);
     return 0;
 }
 
 int message_recv(int fd, struct message* msg, struct vector* buf) {
     /* DETERMINE AMOUNT OF DATA TO READ */
 
-    // FIXME: this should probably be a fixed width integer
-    int body_size = 0; // amount to read based off of length in header
-    if (vec_len(buf) >= MESSAGE_HEADER_SIZE) {
-        body_size = *(int*)vec_byte_ref(buf, sizeof(enum message_type));
+    size_t body_size = 0; // amount to read based off of length in header
+    if (vec_len(buf) >= sizeof(struct message_header)) {
+        struct message_header* header = vec_dat(buf);
+        body_size = ntohl(header->body_len);
     }
      
-    int read_amnt = vec_len(buf) - MESSAGE_HEADER_SIZE + body_size;
+    int read_amnt = vec_len(buf) - sizeof(struct message_header) + body_size;
 
     if (read_amnt < 0)
-        read_amnt = MESSAGE_HEADER_SIZE; // when vec_len(buf) = 0, then read_ammnt < 0.
+        read_amnt = sizeof(struct message_header); // when vec_len(buf) = 0, then read_ammnt < 0.
 
     /* READ AS MUCH DATA AS POSSIBLE */
     uint8_t tmp[read_amnt];
@@ -124,12 +125,13 @@ int message_recv(int fd, struct message* msg, struct vector* buf) {
     vec_pushn(buf, tmp, bytes_read);
 
     // update body_size to match header data, if able.
-    if (vec_len(buf) >= MESSAGE_HEADER_SIZE) {
-        body_size = *(int*)vec_byte_ref(buf, sizeof(enum message_type));
+    if (vec_len(buf) >= sizeof(struct message_header)) {
+        struct message_header* header = vec_dat(buf);
+        body_size = ntohl(header->body_len);
     }
 
-    if (vec_len(buf) < MESSAGE_HEADER_SIZE ||
-        vec_len(buf) < MESSAGE_HEADER_SIZE + body_size) {
+    if (vec_len(buf) < sizeof(struct message_header) ||
+        vec_len(buf) < sizeof(struct message_header) + body_size) {
         return -1;
     }
 
@@ -138,14 +140,14 @@ int message_recv(int fd, struct message* msg, struct vector* buf) {
     msg->type = *(enum message_type *)vec_dat(buf);
 
     if (msg->type >= MSG_NULL) {
-        // the message type is not recognized.  Through out the message.
+        // the message type is not recognized.  Throw out the message.
         vec_resize(buf, 0);
         printf("received an invalid message!\n");
         return -1; // message is invalid
     }
 
     // remove the header from the vector, so it only contains the body.
-    for (unsigned int i = 0; i < MESSAGE_HEADER_SIZE; i++)
+    for (unsigned int i = 0; i < sizeof(struct message_header); i++)
         vec_rem(buf, 0);
 
     if (g_message_funcs[msg->type] != NULL) {

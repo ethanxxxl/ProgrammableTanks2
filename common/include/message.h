@@ -131,7 +131,11 @@ void scenario_tick_des(struct message *msg, const struct vector *dat);
 void scenario_tick_init(struct message *msg);
 void scenario_tick_free(struct message *msg);
 
-#define MESSAGE_HEADER_SIZE (sizeof(enum message_type) + sizeof(int))
+struct message_header {
+    u8 type;
+    u32 body_len;
+};
+
 struct message {
     // message header
     enum message_type type;

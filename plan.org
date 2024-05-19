@@ -418,14 +418,16 @@
      + [X] init
      + [X] free
 
-*** DOCUMENT Implement new functions in ~scenario.h~ [5/5]
+*** DONE Implement new functions in ~scenario.h~ [5/5]
+    CLOSED: [2024-05-18 Sat 22:26]
     - [X] make_player_data
     - [X] free_player_data
     - [X] make_player_public_data
     - [X] player_public_data_get
     - [X] free_player_public_data
       
-*** DOCUMENT write unit tests for message functions
+*** DONE write unit tests for message functions
+    CLOSED: [2024-05-18 Sat 22:26]
     - [X] scenario_tick
     - [X] player_update
 
@@ -459,13 +461,14 @@
       former only works on sockets, while the latter will work on either sockets
       or files (supposedly).
     
-*** TODO revamp message headers.
+*** DONE revamp message headers.
+    CLOSED: [2024-05-18 Sat 22:25]
     currently, there isn't even a structure associated with the message headers.
     The sizes are hardcoded, and the types aren't clear in the code.
 
-    - [ ] Make a message_header structure
-    - [ ] Update message code to use the header structure
-    - [ ] send header/body in a single write command
+    - [X] Make a message_header structure
+    - [X] Update message code to use the header structure
+    - [X] send header/body in a single write command
 
     This should be relatively easy to fix.  The message header is only dealt
     with once per message, not in every type of message (ie in the individual
@@ -530,6 +533,23 @@
 
    #+RESULTS:
    : 0 1 2 3 4 5 6 7 8 9
+
+** TODO [#C] Consider using an OTS serialization solution
+   You can also consider creating a bespoke serialization format (like you are
+   already doing).  Instead of specifying message formats, you would specify
+   serialization formats.  Message types would have to conform to that
+   serialization standard.
+   
+** TODO [#C] Improve message reception throughput
+   you could probably simplify the message reception process.
+
+   1. grab as much data as you can and throw it into a ring buffer.
+   2. if you don't have enough data to complete a message, go to [1]
+   3. take the data, and make a message.  throw the message at the end of a
+      linked list.
+
+   This all could happen in its own thread, so you could separate the message
+   processing and message reception if necessary.
 
 * Bug Fix List
 ** TODO ~connect~ command
