@@ -11,7 +11,7 @@ CFLAGS = -Wall -Wextra -Werror -Wunused-result -pedantic -ftrapv -std=gnu2x -g3 
 BUILDDIR = target
 
 COMMON_DIR = common/src
-SRC_COMMON = message.c vector.c command-line.c scenario.c
+SRC_COMMON = message.c vector.c command-line.c scenario.c csexp.c
 
 SERVER_DIR = server/src
 SRC_SERVER = main.c server-scenario.c player_manager.c server-commands.c
@@ -21,7 +21,7 @@ SRC_CLIENT = client.c client-commands.c client-gfx.c game-manager.c
 
 # unit tests will work differently, each unit will have a main function.
 TESTER_DIR = unit-tests
-SRC_TESTER = vector-test.c message-test.c
+SRC_TESTER = vector-test.c message-test.c csexp-test.c
 
 # mains included here to filter out when running tests.
 MAINS = $(CLIENT_DIR)/client.c $(SERVER_DIR)/main.c

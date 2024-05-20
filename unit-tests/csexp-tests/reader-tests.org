@@ -1,0 +1,46 @@
+#+TITLE: csexp reader test
+#+AUTHOR: Ethan Smith
+#+EMAIL: ethansmith.dev@gmail.com
+
+These are tests of the sexp reader.  This file will be parsed by the unit
+tester, and feed every line beginning with a '>' character to the sexp_reader
+function.  the output is compared against the line that directly follows it.
+
+In future iterations, multiple lines may be used for the output.
+
+the atom <NULL> is reserved.  It is used to indicate that ~sexp_reader~ should
+fail to parse the input text.  It indicates that the reader should return NULL.
+
+* depth=1 no tags
+  > (5:hello 6:world!)
+  (hello world!)
+
+  > (5:hello6:world!)
+  (hello world!)
+
+* depth=1 tags
+  > ([3:str] 22:this is a cool string!)
+  ([str] |this is a cool string!|)
+
+  > ([3:str]22:this is a cool string!)
+  ([str] |this is a cool string!|)
+
+  > [3:str]3:foo
+  [str]foo
+
+* depth=1 tags and no tags
+
+* test 3
+  > 3:bar
+  bar
+  > ()
+  ()
+
+  > (())
+  (())
+
+  > (3:bar (3:foo 5:ethan))
+  (bar (foo ethan))
+
+  > (3:bar (3:foo 5:ethan) 12:Hello World!)
+  (bar (foo ethan) |Hello World!|)
