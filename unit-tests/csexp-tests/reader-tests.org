@@ -12,35 +12,61 @@ the atom <NULL> is reserved.  It is used to indicate that ~sexp_reader~ should
 fail to parse the input text.  It indicates that the reader should return NULL.
 
 * depth=1 no tags
-  > (5:hello 6:world!)
-  (hello world!)
+  - Input    :: (5:HELLO 6:WORLD!)
+    - Assert :: (HELLO WORLD!)
 
-  > (5:hello6:world!)
-  (hello world!)
+  - Input    :: (5:HELLO6:WORLD!)
+    - Assert :: (HELLO WORLD!)
 
 * depth=1 tags
-  > ([3:str] 22:this is a cool string!)
-  ([str] |this is a cool string!|)
-
-  > ([3:str]22:this is a cool string!)
-  ([str] |this is a cool string!|)
-
-  > [3:str]3:foo
-  [str]foo
+  - Input    :: ([3:STR] 22:this is a cool string!)
+    - Assert :: ([STR]|this is a cool string!|)
 
 * depth=1 tags and no tags
+  - Input    :: (3:BAR (3:FOO 5:ETHAN) 12:Hello World!)
+    + Assert :: (BAR (FOO ETHAN) |Hello World!|)
+  - Input    :: (3:BAR (3:FOO 5:ETHAN))
+    + Assert :: (BAR (FOO ETHAN))
+  
+* Empty Expressions
+  - Input    :: ()
+    - Assert :: ()
 
-* test 3
-  > 3:bar
-  bar
-  > ()
-  ()
+  - Input    :: (())
+    - Assert :: (())
 
-  > (())
-  (())
+  - Input    :: (()())
+    - Assert :: (() ())
 
-  > (3:bar (3:foo 5:ethan))
-  (bar (foo ethan))
+  - Input    :: ((()))
+    - Assert :: ((()))
 
-  > (3:bar (3:foo 5:ethan) 12:Hello World!)
-  (bar (foo ethan) |Hello World!|)
+  - Input    :: (((()())()))
+    - Assert :: (((() ()) ()))
+
+* Non-List Atoms
+  - Input    :: 3:BAR
+    - Assert :: BAR
+
+  - Input :: 20:Atom With Mixed Case
+    - Assert :: |Atom With Mixed Case|
+
+  - Input :: 17:AtomWithMixedCase
+    - Assert :: |AtomWithMixedCase|
+
+  - Input :: [3:TAG] 4:ATOM
+    - Assert :: [TAG]ATOM
+
+  - Input :: [3:Tag]4:Atom
+    - Assert :: [|Tag|]|Atom|
+      
+  - Input :: [3:TAG]4:Atom
+    - Assert :: [TAG]|Atom|
+
+  - Input :: [3:Tag]4:ATOM
+    - Assert :: [|Tag|]ATOM
+
+
+* Malformed Expressions
+
+* Advanced Transport
