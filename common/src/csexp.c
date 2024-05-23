@@ -28,10 +28,123 @@ result_ok(size_t length) {
 struct reader_result
 sexp_read_atom(const char** caller_cursor, struct sexp* sexp, bool dryrun) {
     const char* cursor = *caller_cursor;
+    while (isspace(*cursor) && *cursor != '\0') cursor++;
+
+    if (memchr("\0])", *cursor, 3) != 0)
+        return result_err(RESULT_ERR, cursor);
+
+    // test for netstring
+    const char* digit_end = cursor;
+    u32 atom_len = strtoul((char*)cursor, (char**)&digit_end, 10);
+
+    struct reader_result error;
+
+    char* delims;
+    u32 num_delims;
+
+    enum atom_type {
+        STRING,
+        SPECIAL_SYMBOL,
+        SYMBOL,
+    } atom_type;
     
-    while (isspace(*cursor)) cursor++;
+    if (digit_end != cursor && *digit_end == ':') {
+        // this symbol is a netstring.
+        if (!dryrun) {
+            sexp->type = SEXP_SYMBOL;
+            sexp->length = atom_len;
+            memcpy(sexp->data, digit_end+1, atom_len);
+        }
+
+        *caller_cursor = digit_end + atom_len + 1;
+        return result_ok(sizeof(struct sexp) + atom_len);
+    } else if (digit_end != cursor && *digit_end != ':') {
+        return result_err(RESULT_NETSTRING_MISSING_COLON, digit_end);
+        
+    } else if (digit_end != cursor && isspace(*digit_end)) {
+        // symbol is a number
+        if (!dryrun) {
+            sexp->type = SEXP_INTEGER;
+            sexp->length = sizeof(u32);
+            *(u32*)sexp->data = atom_len;
+        }
+
+        *caller_cursor = digit_end;
+        return result_ok(sizeof(struct sexp) + sizeof(u32));
+    } else if (*digit_end == '|') {
+        // symbol is an escaped symbol
+        delims = "|";
+        num_delims = 1;
+            
+        error.status = RESULT_SYMBOL_ESCAPE_NOT_CLOSED;
+        cursor = digit_end+1;
+        atom_type = SPECIAL_SYMBOL;
+                    
+    } else if (*digit_end == '"') {
+        // symbol is a string
+        delims = "\"";
+        num_delims = 1;
+        
+        error.status = RESULT_QUOTE_NOT_CLOSED;
+        cursor = digit_end+1;
+        atom_type = STRING;
+        
+    } else {
+        // regular symbol.
+        delims = "\0 ()[]\"";
+        num_delims = 7;
+        atom_type = SYMBOL;
+    }
+
+    size_t i;
+    for (i = 0;
+         memchr(delims, *cursor, num_delims) == 0 && *cursor != '\0';
+         cursor++, i++);
+
+    // the string ended without finding a terminating delimeter.
+    if (memchr(delims, *cursor, num_delims) == 0) {
+        error.error_location = cursor;
+        return error;
+    }
+
+    if (!dryrun) {
+        switch (atom_type) {
+        case SPECIAL_SYMBOL:
+        case SYMBOL:
+            sexp->type = SEXP_SYMBOL;
+            break;
+        case STRING:
+            sexp->type = SEXP_STRING;
+            break;
+        }
+
+        sexp->length = i;
+
+        memcpy(sexp->data, cursor - i, i);
+        if (atom_type == SYMBOL)
+            for (u8* c = sexp->data; c < sexp->data + i; c++)
+                *c = toupper(*c);
+    }
+
+    // skip past the terminator, unless this is a regular symbol.
+    *caller_cursor = atom_type == SYMBOL ? cursor : cursor + 1;
+    return result_ok(i + sizeof(struct sexp));
+}
+   
+
+struct reader_result
+_sexp_read_atom(const char** caller_cursor, struct sexp* sexp, bool dryrun) {
+    const char* cursor = *caller_cursor;
+    
+    while (isspace(*cursor) && *cursor != '\0') cursor++;
     if (*cursor == '\0')
         return result_ok(0);
+
+    if (isdigit(*cursor)) {
+    } else if (*cursor == '"') {
+        
+    }
+        
 
     // ([3:gif] 250:xxxxxx 3:foo)
     // ~~~~~~~~~^~~~~~~~~~~~~~~~~
@@ -39,7 +152,7 @@ sexp_read_atom(const char** caller_cursor, struct sexp* sexp, bool dryrun) {
     u32 atom_len = strtoul((char*)cursor, (char**)&digit_end, 10);
 
     // strtoul will set digit_end to cursor if no conversion was performed.
-    // that is, an invalid number is present.
+    // that is, this is not a netstring.
     if (digit_end == cursor)
         return result_err(RESULT_BAD_NETSTRING_LENGTH, cursor);
 
@@ -54,7 +167,7 @@ sexp_read_atom(const char** caller_cursor, struct sexp* sexp, bool dryrun) {
     // if this isn't a dryrun...
     if (!dryrun && sexp != NULL) {
         sexp->length = atom_len;
-        sexp->type = SEXP_ATOM;
+        sexp->type = SEXP_SYMBOL;
         memcpy(sexp->data, cursor, atom_len);
     } else if (!dryrun && sexp == NULL) {
         return result_err(RESULT_NULL_SEXP_PARAMETER, NULL);
@@ -86,8 +199,10 @@ sexp_read_tagged_atom(const char** caller_cursor,
     result = sexp_read_atom(&cursor,
                             sexp == NULL ? NULL : (struct sexp*)sexp->data,
                             dryrun);
-    
-    if (result.status != RESULT_OK)
+
+    if (result.status == RESULT_ERR)
+        return result_err(RESULT_TAG_MISSING_TAG, result.error_location);
+    else if (result.status != RESULT_OK)
         return result;
 
     size_t tag_length = result.length;
@@ -117,14 +232,16 @@ sexp_read_tagged_atom(const char** caller_cursor,
                                         (struct sexp*)(sexp->data + tag_length),
                             dryrun);
 
-    if (result.status != RESULT_OK)
+    if (result.status == RESULT_ERR)
+        return result_err(RESULT_TAG_MISSING_SYMBOL, result.error_location);
+    else if (result.status != RESULT_OK)
         return result;
 
     size_t atom_length = result.length;
 
     if (!dryrun && sexp != NULL) {
         sexp->length = tag_length + atom_length;
-        sexp->type = SEXP_TAGGED_ATOM;        
+        sexp->type = SEXP_TAG;        
     }
 
     // udate caller cursor, and return length in of sexp (in memory)
@@ -143,7 +260,7 @@ sexp_read_list(const char** caller_cursor, struct sexp* sexp, bool dryrun) {
     // list length in memory
     size_t list_length = 0;
     while (true) {
-        while (isspace(*cursor)) cursor++; // skip leading whitespace
+        while (isspace(*cursor) && *cursor != '\0') cursor++; // skip leading whitespace
 
         // see the the character under the cursor indicates the end of the list
         if (*cursor == ')') {
@@ -177,7 +294,7 @@ struct reader_result
 sexp_reader(const char** caller_cursor, struct sexp* sexp, bool dryrun) {
     const char* cursor = *caller_cursor;
     // CURRENTLY ONLY SUPPORT CANONICAL TRANSPORT MODE
-    while (isspace(*cursor)) cursor++;
+    while (isspace(*cursor) && *cursor != '\0') cursor++;
 
     struct reader_result result;
     switch (*cursor) {
@@ -215,7 +332,7 @@ sexp_reader(const char** caller_cursor, struct sexp* sexp, bool dryrun) {
 
 struct reader_result
 sexp_read(const char* sexp_str, struct sexp* sexp, bool dryrun) {
-    while (isspace(*sexp_str)) sexp_str++;
+    while (isspace(*sexp_str) && *sexp_str != '\0') sexp_str++;
     if (*sexp_str == ')')
         return result_err(RESULT_INVALID_CHARACTER, sexp_str);
 
@@ -225,7 +342,7 @@ sexp_read(const char* sexp_str, struct sexp* sexp, bool dryrun) {
         return result;
     
     // fail if their is trailing garbage.
-    while (isspace(*sexp_str)) sexp_str++;
+    while (isspace(*sexp_str) && *sexp_str != '\0') sexp_str++;
     if (*sexp_str != '\0')
         return result_err(RESULT_TRAILING_GARBAGE, sexp_str);
 
@@ -247,14 +364,14 @@ const struct sexp* sexp_nth(const struct sexp* sexp, size_t n) {
 }
 
 const struct sexp* sexp_tag_get_tag(const struct sexp* sexp) {
-    if (sexp == NULL || sexp->type != SEXP_TAGGED_ATOM)
+    if (sexp == NULL || sexp->type != SEXP_TAG)
         return NULL;
 
     return (struct sexp*)sexp->data;
 }
 
 const struct sexp* sexp_tag_get_atom(const struct sexp* sexp) {
-    if (sexp == NULL || sexp->type != SEXP_TAGGED_ATOM)
+    if (sexp == NULL || sexp->type != SEXP_TAG)
         return NULL;
 
     // ⬇~~~~~~~~~~~~~~
@@ -265,42 +382,75 @@ const struct sexp* sexp_tag_get_atom(const struct sexp* sexp) {
     return (struct sexp*)(tag->data + tag->length);
 }
 
-s32 sexp_atom_fprint(const struct sexp* sexp, FILE* f) {
-    if (sexp == NULL || sexp->type != SEXP_ATOM)
+s32 sexp_string_fprint(const struct sexp* sexp, FILE* f) {
+    if (sexp == NULL || sexp->type != SEXP_STRING)
         return -1;
 
-    bool special_print = false;
+    fprintf(f, "\"%.*s\"", sexp->length, sexp->data);
+    return 0;
+}
+
+s32 sexp_integer_fprint(const struct sexp* sexp, FILE* f) {
+    if (sexp == NULL || sexp->type != SEXP_INTEGER)
+        return -1;
+
+    fprintf(f, "\"%d\"", *(u32*)sexp->data);
+    return 0;
+}
+
+s32 sexp_symbol_fprint(const struct sexp* sexp, FILE* f) {
+    if (sexp == NULL || sexp->type != SEXP_SYMBOL)
+        return -1;
+
+    enum print_type {
+        PRINT_NORMAL,
+        PRINT_SPECIAL,
+        PRINT_NETSTRING,
+    } print_type = PRINT_NORMAL;
+
     for (const u8* c = sexp->data;  c < sexp->data + sexp->length; c++) {
         if (isspace(*c) || islower(*c)) {
-            special_print = true;
-            break; 
+            print_type = PRINT_SPECIAL;
+            break;
+        }
+
+        if (*c == '|') {
+            print_type = PRINT_NETSTRING;
+            break;
         }
     }
 
-    if (special_print)
-        fprintf(f, "|%.*s|", sexp->length, sexp->data);
-    else
+    switch (print_type) {
+    case PRINT_NORMAL:
         fprintf(f, "%.*s", sexp->length, sexp->data);
+        break;
+    case PRINT_SPECIAL:
+        fprintf(f, "|%.*s|", sexp->length, sexp->data);
+        break;
+    case PRINT_NETSTRING:
+        fprintf(f, "%d:%.*s", sexp->length, sexp->length, sexp->data);
+        break;
+    }
 
     return 0;
 }
 
 s32 sexp_tagged_atom_fprint(const struct sexp* sexp, FILE* f) {
-    if (sexp == NULL || sexp->type != SEXP_TAGGED_ATOM)
+    if (sexp == NULL || sexp->type != SEXP_TAG)
         return -1;
 
     s32 ret;
 
     fputc('[', f);
     const struct sexp* tag = sexp_tag_get_tag(sexp);
-    ret = sexp_atom_fprint(tag, f);
+    ret = sexp_symbol_fprint(tag, f);
     if (ret == -1)
         return ret;
     
     fputc(']', f);
 
     const struct sexp* atom = sexp_tag_get_atom(sexp);
-    ret = sexp_atom_fprint(atom, f);
+    ret = sexp_symbol_fprint(atom, f);
     if (ret == -1)
         return ret;
 
@@ -342,10 +492,16 @@ s32 sexp_fprinter(const struct sexp* sexp, FILE* f) {
     
     s32 ret;
     switch (sexp->type) {
-    case SEXP_ATOM:
-        ret = sexp_atom_fprint(sexp, f);
+    case SEXP_SYMBOL:
+        ret = sexp_symbol_fprint(sexp, f);
         break;
-    case SEXP_TAGGED_ATOM: 
+    case SEXP_INTEGER:
+        ret = sexp_integer_fprint(sexp, f);
+        break;
+    case SEXP_STRING:
+        ret = sexp_string_fprint(sexp, f);
+        break;
+    case SEXP_TAG: 
         ret = sexp_tagged_atom_fprint(sexp, f);
         break;
     case SEXP_LIST:

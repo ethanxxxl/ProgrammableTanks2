@@ -191,10 +191,10 @@ const char* tst_reader(void) {
 
         u8 sexp_data[sexp_length];
 
-        if (result.status == RESULT_OK)
+        if (result.status == RESULT_OK) {
             sexp = (struct sexp*)sexp_data;
-        
-        sexp_read(input_str, sexp, false);
+            sexp_read(input_str, sexp, false);
+        }
         
         // put the input into the logfile
         fprintf(log_file, "  - Input    :: %s\n", input_str);

@@ -7,16 +7,19 @@
 #include <stdio.h>
 #include <stddef.h>
 
-#define FOR_EACH_RESULT_TYPE(RESULT) \
-    RESULT(RESULT_OK) \
-    RESULT(RESULT_ERR) \
-    RESULT(RESULT_BAD_NETSTRING_LENGTH) \
-    RESULT(RESULT_NETSTRING_MISSING_COLON) \
-    RESULT(RESULT_TAG_NOT_CLOSED) \
-    RESULT(RESULT_LIST_NOT_CLOSED) \
-    RESULT(RESULT_INVALID_CHARACTER) \
-    RESULT(RESULT_TRAILING_GARBAGE) \
-    RESULT(RESULT_NULL_SEXP_PARAMETER)
+#define FOR_EACH_RESULT_TYPE(RESULT) RESULT(RESULT_OK)  \
+         RESULT(RESULT_ERR)                             \
+         RESULT(RESULT_BAD_NETSTRING_LENGTH)            \
+         RESULT(RESULT_NETSTRING_MISSING_COLON)         \
+         RESULT(RESULT_TAG_NOT_CLOSED)                  \
+         RESULT(RESULT_TAG_MISSING_TAG)                 \
+         RESULT(RESULT_TAG_MISSING_SYMBOL)              \
+         RESULT(RESULT_LIST_NOT_CLOSED)                 \
+         RESULT(RESULT_QUOTE_NOT_CLOSED)                \
+         RESULT(RESULT_SYMBOL_ESCAPE_NOT_CLOSED)        \
+         RESULT(RESULT_INVALID_CHARACTER)               \
+         RESULT(RESULT_TRAILING_GARBAGE)                \
+         RESULT(RESULT_NULL_SEXP_PARAMETER)             \
 
 #define GENERATE_ENUM(ENUM) ENUM,
 #define GENERATE_STRING(STRING) #STRING,
@@ -44,9 +47,11 @@ struct reader_result {
 };
 
 enum sexp_type {
-    SEXP_ATOM,
-    SEXP_TAGGED_ATOM,
     SEXP_LIST,
+    SEXP_TAG,
+    SEXP_SYMBOL,
+    SEXP_INTEGER,
+    SEXP_STRING,
 };
 
 /**

@@ -67,6 +67,110 @@ fail to parse the input text.  It indicates that the reader should return NULL.
     - Assert :: [|Tag|]ATOM
 
 
-* Malformed Expressions
+* Malformed Expressions - Open Groups
+  - Input :: (
+    - Assert :: <RESULT_LIST_NOT_CLOSED>
+      
+  - Input :: [
+    - Assert :: <RESULT_TAG_MISSING_TAG>
+      
+  - Input :: "
+    - Assert :: <RESULT_QUOTE_NOT_CLOSED>
 
-* Advanced Transport
+* Malformed Expressions - Atoms
+  - Input :: (5:TEST)
+    - Assert :: <RESULT_LIST_NOT_CLOSED>
+      
+  - Input :: 0x12:rtxdefinitely
+    - Assert :: <RESULT_NETSTRING_MISSING_COLON>
+      
+  - Input :: 0b 101o1o:definitely not
+    - Assert :: <RESULT_NETSTRING_MISSING_COLON>
+      
+  - Input :: 001octal?:definitely not
+    - Assert :: <RESULT_NETSTRING_MISSING_COLON>
+      
+  - Input :: (4ba:TEST)
+    - Assert :: <RESULT_NETSTRING_MISSING_COLON>
+      
+  - Input :: (3foo)
+    - Assert :: <RESULT_NETSTRING_MISSING_COLON>
+      
+* Malformed Expressions - Trailing Garbage
+  - Input :: )
+    - Assert :: <RESULT_INVALID_CHARACTER>
+      
+  - Input :: ]
+    - Assert :: <RESULT_INVALID_CHARACTER>
+      
+  - Input :: ())
+    - Assert :: <RESULT_TRAILING_GARBAGE>
+      
+  - Input :: ()()
+    - Assert :: <RESULT_TRAILING_GARBAGE>
+
+* Malformed Expressions - Tags
+  - Input :: [3:TAG]
+    - Assert :: <RESULT_TAG_MISSING_SYMBOL>
+      
+  - Input :: ([3:TAG])
+    - Assert :: <RESULT_TAG_MISSING_SYMBOL>
+      
+  - Input :: ([3:TAG])
+    - Assert :: <RESULT_TAG_MISSING_SYMBOL>
+      
+  - Input :: ([4:TAG1] [4:TAG2])
+    - Assert :: <RESULT_TAG_MISSING_SYMBOL>
+      
+  - Input :: [two tags] atom
+    - Assert :: <RESULT_TAG_NOT_CLOSED>
+
+  - Input :: [] 3:TAG
+    - Assert :: <RESULT_TAG_MISSING_TAG>
+
+* Advanced Transport - Atoms
+  - Input :: test
+    - Assert :: TEST
+      
+  - Input :: 3:foo
+    - Assert :: |foo|
+      
+  - Input :: |Multi Case and Spaces|
+    - Assert :: |Multi Case and Spaces|
+      
+  - Input :: 24:|why would you do this?|
+    - Assert :: 24:|why would you do this?|
+    
+* Advanced Transport - Tags
+  - Input :: [cool] beans
+    - Assert :: [COOL]BEANS
+    
+
+* Advanced Transport - Lists
+  - Input :: (this is a sexp)
+    - Assert :: (THIS IS A SEXP)
+      
+  - Input :: ([this]is a sexp)
+    - Assert :: ([THIS]IS A SEXP)
+      
+  - Input :: (5:mixedatoms)
+    - Assert :: (|mixed| ATOMS)
+
+* Advanced Transport - Strings
+  - Input :: "test"
+    - Assert :: "test"
+      
+  - Input :: ("cool" "beans")
+    - Assert :: ("cool" "beans")
+      
+  - Input :: ("real""close")
+    - Assert :: ("real" "close")
+      
+  - Input :: ("embedded sexp: (this should be fine)")
+    - Assert :: ("embedded sexp: (this should be fine)")
+      
+  - Input :: ("this" (is "a" test "of" ("strings on" multiple) "levels" ) "!")
+    - Assert :: ("this" (IS "a" TEST "of" ("strings on" MULTIPLE) "levels") "!")
+      
+  - Input :: ("this"(is"a"test"of"("strings on"multiple)"levels")"!")
+    - Assert :: ("this" (IS "a" TEST "of" ("strings on" MULTIPLE) "levels") "!")
