@@ -5,7 +5,7 @@
 #include <stdint.h>
 #include <string.h>
 
-const char INIT_FAIL[] = "falled to create vector.";
+const char INIT_FAIL[] = "failed to create vector.";
 
 // HACK these are externs referenced in scenario.c which are defined in the
 // server translation unit. In order for the tests to compile, they need to

@@ -35,7 +35,7 @@ struct failed_test {
 static const char CODE_CLEAR[]      = "\033[0m";
 static const char CODE_INVERT[]     = "\033[7m";
 static const char CODE_BOLD[]       = "\033[1m";
-static const char CODE_BOLD_CLR[]   = "\033[21m";
+static const char CODE_BOLD_CLR[]   = "\033[22m";
 static const char CODE_ITALIC[]     = "\033[3m";
 static const char CODE_ITALIC_CLR[] = "\033[23m";
 static const char CODE_BG_GREEN[]   = "\033[30;42m";
