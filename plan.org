@@ -3,7 +3,7 @@
 #+EMAIL: ethansmith.dev@gmail.com
 
 #+STARTUP: logdone overview
-#+TODO: TODO STARTED DOCUMENT | DONE
+#+TODO: TODO STARTED DOCUMENT | DONE CANCEL
 
 * Overview
   this is my second attempt to create a game/simulation of AI tank combat.
@@ -199,7 +199,7 @@
    each /Message Type/ will be unique.  Message Types from ~0x00~ through ~0x7f~
    originate from the client.  /Message Types/ from ~0x80~ through ~0xff~
    originate from the server.
-         
+   
 ** Message Type Summary
    #+CAPTION: Summary of Messages
    | /Message Type/ | Description              |
@@ -332,11 +332,147 @@
 *** RESPONSE_FAIL
 *** RESPONSE_INVALID_REQUEST
 
-* Serialization Specification
-  This is a binary serialization format tailored specifically for this
-  applictation.
+
+* Networking Specification 2.0
+** Header Structure
+   
+** Message Type Summary
+   #+CAPTION: Summary of Messages
+   | /Message Type/ | Description              |
+   |----------------+--------------------------|
+   |           0x00 | REQUEST_AUTHENTICATE     |
+   |           0x01 | REQUEST_LIST_SCENARIOS   |
+   |           0x02 | REQUEST_CREATE_SCENARIO  |
+   |           0x03 | REQUEST_JOIN_SCENARIO    |
+   |           0x04 | REQUEST_PLAYER_UPDATE    |
+   |           0x05 | REQUEST_RETURN_TO_LOBBY  |
+   |           0x06 | REQUEST_DEBUG            |
+   |----------------+--------------------------|
+   |           0x80 | RESPONSE_SCENARIO_TICK   |
+   |           0x81 | RESPONSE_SUCCESS         |
+   |           0x82 | RESPONSE_FAIL            |
+   |           0x83 | RESPONSE_INVALID_REQUEST |
+   
+** IDLE State Requests
+   #+CAPTION: Messages sent by the client in the IDLE state
+   | /Message Type/ | Description              |
+   |----------------+--------------------------|
+   |           0x00 | REQUEST_AUTHENTICATE     |
+   
+
+** LOBBY State Requests
+   #+CAPTION: Messages sent by the client in the LOBBY state
+   | /Message Type/ | Description             |
+   |----------------+-------------------------|
+   |           0x01 | REQUEST_LIST_SCENARIOS  |
+   |           0x02 | REQUEST_CREATE_SCENARIO |
+   |           0x03 | REQUEST_JOIN_SCENARIO   |
+   
+** SCENARIO State Requests
+   #+CAPTION: messages sent by the client in the SCENARIO state
+   | /Message Type/ | Description             |
+   |----------------+-------------------------|
+   |           0x04 | REQUEST_PLAYER_UPDATE   |
+   |           0x05 | REQUEST_RETURN_TO_LOBBY |
+   |           0x06 | REQUEST_DEBUG           |
+
+*** REQUEST_PLAYER_UPDATE
+    #+begin_src lisp
+      (PLAYER-UPDATE (X Y X Y X Y X Y ...)
+                     (CMD1 CMD2 CMD3 ...))
+    #+end_src
+    
+*** REQUEST_RETURN_TO_LOBBY
+
+*** REQUEST_DEBUG
+    
+** Server Responses
+   | /Message Type/ | Description              |
+   |----------------+--------------------------|
+   |           0x80 | RESPONSE_SCENARIO_TICK   |
+   |           0x81 | RESPONSE_SUCCESS         |
+   |           0x82 | RESPONSE_FAIL            |
+   |           0x83 | RESPONSE_INVALID_REQUEST |
+
+*** RESPONSE_SCENARIO_TICK
+    #+begin_src lisp
+      (SCENARIO-TICK (USERNAME1 (X Y X Y X Y ...))
+                     (USERNAME2 (X Y X Y X Y ...))
+                     (USERNAME3 (X Y X Y X Y ...))
+                     ...)
+    #+end_src
+
+*** RESPONSE_SUCCESS
+*** RESPONSE_FAIL
+*** RESPONSE_INVALID_REQUEST
+
+* Serialization Specification: CSEXPs
+  The /csexp/, or canonical s-expression, is a superset of s-expressions that
+  allows for compact data storage and structuring.  This document loosely
+  follows an internet raft for S-expressions produced by Dr. Rivest.  The
+  latest revision of this draft is provided by [[https://www.ietf.org/archive/id/draft-rivest-sexp-08.html][IETF]].  This specification will
+  primarily focus on the *basic transport* representation described in the
+  draft.
+
+  The serialization format is summarized below.  Note that this specification
+  does not strictly follow the draft referenced above.  Liberties have been
+  taken for this specific use case.
+  
+  In addition to normal sexp rules, atoms may be formatted as a /netstring/.
+  Netstrings are encoded as ~size:value~, where /size/ is the length of the atom
+  in bytes, and the value is the byte sequence that composes the atom.
+
+  Since it is possible to distinguish the atom without any whitespace
+  separators, for netstring atoms, no trailing whitespace is necessary, and will
+  be ignored.
+
+  as an example, the following csexps represent identical data:
+  : (5:hello17:this is some data9:there are1:55:sexps)
+  : (hello |this is some data| |there are| 5 sexps)
+
+  An atom may be tagged with a type by enclosing an atom in square brackets ~[]~
+  directly before it.  For example, ~([int]53 [str] "dog" [3:bar] 5:ethan)~.
+  Notice that since the brackets are reserved punctuation, trailing whitespace
+  is ignored.
 
   
+ 
+**  Character Sets
+   - Reserved Punctuation
+     + ( ) :: list notation
+     + [ ] :: type annotation
+     + |   :: atom character set extension
+     + ""  :: string
+
+   - Special use Characters
+     + : :: netstring syntax
+     + # :: denotes special representation (hex)
+
+** BNF for syntax
+   note: copied from the first draft edition
+   
+   We use the following notation:
+   - <x>* :: means 0 or more occurrences of <x>
+   - <x>+ :: means 1 or more occurrences of <x>  
+   - <x>? :: means 0 or 1 occurrences of <x>
+   parentheses	are used for grouping, as in (<x> | <y>)*
+
+   For canonical and basic transport:
+
+   - <sexpr>           :: <string> | <list>
+   - <string>          :: <display>? <simple-string> ;
+   - <simple-string>   :: <raw> ;
+   - <display>         :: "[" <simple-string> "]" ;
+   - <raw>             :: <decimal> ":" <bytes> ;
+   - <decimal>         :: <decimal-digit>+ ;
+                          + Decimal numbers should have no unnecessary leading
+                            zeros
+   - <bytes>           :: any string of bytes, of the indicated length
+   - <list>            :: "(" <sexp>* ")" ;
+   - <decimal-digit>   :: "0" | ... | "9" ;
+     
+
+** sructuring.
 ** Data Types
    - strings
    - integers
@@ -359,17 +495,40 @@
    their length and a colon
 
    the following csexp...
-   : (5:hello17:this is some data9:there are1:55:sexps)
-   ... maps to the following sexp
-   : (hello |this is some data| |there are| 5 sexps)
+  
 
    for plain text data, there isn't much of an advantage over the regular sexps.
    But csexps can encode binary data as well.  after doing some research, it
    seems that these things were never fully standardized.  I am taking this to
    mean that I can work with them pretty much however I want. 
-  
+** netstrings extension
+   if colon is made a special character, IE, its use is reserved within an atom,
+   then we can extend the netstrings capabilities.
 
+   alternatively, we could use a non-printable character instead.  ex, if 0x02
+   is in a place where a colon would normally be in a netstring, then the
+   preceding characters have a predetermined meaning.
+   
+   
 
+   - 0x30 - 0x39 :: ASCII Digits 0-9
+   - 0x5b :: Type Start '['
+   - 0x5d :: Type Stop ']'
+   - 0x28 :: '('
+   - 0x29 :: ')'
+     
+   
+   | '0' | 00110000 |
+   | '1' | 00110001 |
+   | '2' |          |
+   | '3' |          |
+   | '4' |          |
+   | '5' |          |
+   | '6' |          |
+   | '7' |          |
+   | '8' |          |
+   | '9' |          |
+   
 * Feature List
 ** TODO Multiple Scenarios
    - [ ] The Server can create new scenarios
@@ -442,7 +601,8 @@
    - [ ] write unit tests
    - [ ] write documentation
 
-** STARTED [#A] update networking specification
+** CANCEL [#A] update networking specification
+   CLOSED: [2024-05-21 Tue 01:04]
    update the message functions to reflect what you have written in this
    document for the networking specification.
 
@@ -573,12 +733,14 @@
    #+RESULTS:
    : 0 1 2 3 4 5 6 7 8 9
 
-** TODO [#A] implement a form of csexps
+
+** STARTED [#A] implement a form of csexps
    You can also consider creating a bespoke serialization format (like you are
    already doing).  Instead of specifying message formats, you would specify
    serialization formats.  Message types would have to conform to that
    serialization standard.
    
+** TODO Add error types for all project components
 ** TODO [#C] Improve message reception throughput
    you could probably simplify the message reception process.
 
@@ -629,5 +791,3 @@
 ** TODO Message Network Ordering
    [2024-05-12 Sun] Messages are constructed using host order, little endian.  They need to be
    sent in network order, big endian.
-
-   

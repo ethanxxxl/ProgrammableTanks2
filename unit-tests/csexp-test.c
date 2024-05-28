@@ -5,6 +5,7 @@
 #include "vector.h"
 #include <ctype.h>
 #include <stdlib.h>
+#include <string.h>
 
 /**
  * reads in a test file into buffer.  every new line is cached in the newlines
@@ -72,10 +73,58 @@ char* get_file_line(size_t line, vector* buffer, vector* line_cache) {
     return vec_ref(buffer, *(size_t*)vec_ref(line_cache, line));
 }
 
+struct test_case {
+    const char* input;
+    const char* assert;
+};
+
 const char* g_reader_test_filepath = "unit-tests/csexp-tests/reader-tests.org";
 const char* g_reader_log_filepath  = "unit-tests/csexp-tests/reader-log.org";
 vector *g_reader_test_file;
 vector *g_reader_test_file_line_cache;
+
+/**
+ takes a line, and if it contains an org description list-item, it returns the
+ description.
+
+ For example, the following are all valid:
+ 
+ * ITEM :: description
+ - ANOTHER-ITEM :: description
+   + ITEM 3     :: description
+
+*/
+const char* org_item_description(const char* line, const char* item) {
+    while (isspace(*line)) line++;
+
+    switch (*line) {
+    case '-':
+    case '+':
+    case '*':
+        line++;
+        break;
+    default:
+        return NULL;
+    }
+
+    while (isspace(*line)) line++;
+
+
+    for (const char* c = item; *c != '\0' && *line != '\0'; c++, line++) {
+        if (*c != *line)
+            return NULL;
+    }
+    
+    while (isspace(*line)) line++;
+
+    if (strncmp(line, "::", 2) != 0)
+        return NULL;
+
+    line += 2;
+
+    while (isspace(*line)) line++;
+    return line;
+}
 
 /**
  * test function.  this is highly stateful function.  It relies on the test
@@ -113,33 +162,44 @@ const char* tst_reader(void) {
     for (; current_line < vec_len(line_cache); current_line++) {
         char* line = get_file_line(current_line, buffer, line_cache);
 
-        while (isspace(*line)) line++;
-
         // if another heading is seen, stop.  The next call to this function
         // will pick up where it was left off.
         if (strncmp(line, "* ", 2) == 0)
             break;
 
-        while (isspace(*line)) line++;
-        if (*line != '>')
+        
+        const char* input_str = org_item_description(line, "Input");
+        if (input_str == NULL)
             continue;
 
-        // skip the ">" and any following whitespace
-        line++;
-        while (isspace(*line)) line++;
-        vector* sexp = sexp_read((u8*)line);
+        const char* assert_str;
+        do {
+            current_line++;
+            line = get_file_line(current_line, buffer, line_cache);
+            assert_str = org_item_description(line, "Assert");
+        } while (assert_str == NULL);
+        
+        /// RUN TEST
 
+        struct reader_result result = sexp_read(input_str, NULL, true);
+
+        struct sexp* sexp = NULL;
+        size_t sexp_length = 0;
+
+        if (result.status == RESULT_OK)
+            sexp_length = result.length;
+
+        u8 sexp_data[sexp_length];
+
+        if (result.status == RESULT_OK) {
+            sexp = (struct sexp*)sexp_data;
+            sexp_read(input_str, sexp, false);
+        }
+        
         // put the input into the logfile
-        fprintf(log_file, "  - Input :: %s\n", line);
-
-        // go to the result line in the test file, and put it in the log file
-        // for reference.
-        current_line++;
-        line = get_file_line(current_line, buffer, line_cache);
-        while (isspace(*line)) line++;
-
-        fprintf(log_file, "    + Assert :: %s\n", line); 
-        fprintf(log_file, "    + Return :: "); // spaces for aligning sexp_print
+        fprintf(log_file, "  - Input    :: %s\n", input_str);
+        fprintf(log_file, "    + Assert :: %s\n", assert_str); 
+        fprintf(log_file, "    + Return :: ");
         fflush(log_file);
 
         // find the position in the file before writing
@@ -148,10 +208,12 @@ const char* tst_reader(void) {
 
         // print the sexp (unless parsing failed)
         if (sexp != NULL) {
-            sexp_fprint(log_file, sexp);
+            sexp_fprint(sexp, log_file);
             fflush(log_file);
         } else {
-            fputs("<NULL>\n", log_file);
+            fprintf(log_file,
+                    "<%s>\n", G_READER_RESULT_TYPE_STR[result.status]);
+            
         }
         
         // find the end of the log file to determine how much data was written
@@ -161,9 +223,17 @@ const char* tst_reader(void) {
         // read in results from log file
         char printed_sexp[end-start];
         fread(printed_sexp, sizeof(char), end-start, log_file);
-            
-        if (strcmp(printed_sexp, line) != 0)
+
+        // assert_str has a newline instead of a null terminator, so don't
+        // compare that last character
+        if (strncmp(printed_sexp, assert_str, strlen(assert_str)) != 0)
             error_msg = "bad reader value, check log file";
+
+        // print error message on next line, after grabbing the output from the
+        // log file.
+        if (sexp == NULL && result.error_location != NULL) {
+            fprintf(log_file, "    + Error  :: %s\n", result.error_location);
+        }
         
         fputs("\n", log_file);
         fflush(log_file);

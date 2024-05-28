@@ -1,94 +1,175 @@
 #include "csexp.h"
-#include "vector.h"
 
 #include <ctype.h>
+#include <stddef.h>
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
 
-// pushes the prefix for a sexp item onto the sexp object.  Returns the index
-// to the start of that item.
-size_t sexp_push_prefix(vector* sexp, enum sexp_type type, u32 length) {
-    size_t start = vec_len(sexp);
+const char* G_READER_RESULT_TYPE_STR[] = {
+    FOR_EACH_RESULT_TYPE(GENERATE_STRING)
+}; 
 
-    struct sexp_prefix prefix = { type, length };
-    vec_pushn(sexp, &prefix, sizeof(struct sexp_prefix));
-
-    return start;
+struct reader_result
+result_err(enum reader_result_type error, const char* location) {
+    return (struct reader_result){
+        .status = error,
+        .error_location = location};
 }
 
-struct sexp_prefix* sexp_get_prefix(vector* sexp, size_t sexp_offset) {
-    return (struct sexp_prefix*)vec_ref(sexp, sexp_offset);
+struct reader_result
+result_ok(size_t length) {
+    return (struct reader_result){
+        .status = RESULT_OK,
+        .length = length};
 }
 
-s64 sexp_read_atom(u8** atom, vector* sexp) {
-    u8* cursor = *atom;
-    size_t sexp_start = vec_len(sexp);
+////////////////////////////////////////////////////////////////////////////////
+// SEXP READER FUNCTIONS ///////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
 
-    while (isspace(*cursor)) cursor++;
-    if (*cursor == '\0')
-        return 0;
+struct reader_result
+sexp_read_atom(const char** caller_cursor, struct sexp* sexp, bool dryrun) {
+    const char* cursor = *caller_cursor;
+    while (isspace(*cursor) && *cursor != '\0') cursor++;
 
-    // ([3:gif] 250:xxxxxx 3:foo)
-    // ~~~~~~~~~^~~~~~~~~~~~~~~~~
-    u8* digit_end = cursor;
+    if (memchr("\0])", *cursor, 3) != 0)
+        return result_err(RESULT_ERR, cursor);
+
+    // test for netstring
+    const char* digit_end = cursor;
     u32 atom_len = strtoul((char*)cursor, (char**)&digit_end, 10);
 
-    // strtoul will set digit_end to cursor if no conversion was performed.
-    // that is, an invalid number is present.
-    if (digit_end == cursor)
-        return -1;
+    struct reader_result error;
 
-    // ensure that the colon is present, then skip past it.
-    // ([3:gif] 250:xxxxxx 3:foo)
-    // ~~~~~~~~~~~~^~~~~~~~~~~~~~
-    cursor = digit_end;
-    if (*cursor != ':')
-        return -1;
-    cursor++;
+    char* delims;
+    u32 num_delims;
 
-    // add the data to the sexp object
-    sexp_push_prefix(sexp, SEXP_ATOM, atom_len);
-    vec_pushn(sexp, cursor, atom_len);
-
-    // update the cursor for subsequent calls
-    // ([3:gif] 250:xxxxxx 3:foo)
-    // ~~~~~~~~~~~~~~~~~~~^~~~~~~
-    cursor += atom_len;
-    *atom = cursor;
+    enum atom_type {
+        STRING,
+        SPECIAL_SYMBOL,
+        SYMBOL,
+    } atom_type;
     
-    return vec_len(sexp) - sexp_start;
+    if (digit_end != cursor && *digit_end == ':') {
+        // this symbol is a netstring.
+        if (!dryrun) {
+            sexp->type = SEXP_SYMBOL;
+            sexp->length = atom_len;
+            memcpy(sexp->data, digit_end+1, atom_len);
+        }
+
+        *caller_cursor = digit_end + atom_len + 1;
+        return result_ok(sizeof(struct sexp) + atom_len);
+    }  else if (digit_end != cursor && (isspace(*digit_end) || *digit_end == ')')) {
+        // symbol is a number
+        if (!dryrun) {
+            sexp->type = SEXP_INTEGER;
+            sexp->length = sizeof(u32);
+            *(u32*)sexp->data = atom_len;
+        }
+
+        *caller_cursor = digit_end;
+        return result_ok(sizeof(struct sexp) + sizeof(u32));
+    } else if (digit_end != cursor && *digit_end != ':') {
+        return result_err(RESULT_NETSTRING_MISSING_COLON, digit_end);
+        
+    } else if (*digit_end == '|') {
+        // symbol is an escaped symbol
+        delims = "|";
+        num_delims = 1;
+            
+        error.status = RESULT_SYMBOL_ESCAPE_NOT_CLOSED;
+        cursor = digit_end+1;
+        atom_type = SPECIAL_SYMBOL;
+                    
+    } else if (*digit_end == '"') {
+        // symbol is a string
+        delims = "\"";
+        num_delims = 1;
+        
+        error.status = RESULT_QUOTE_NOT_CLOSED;
+        cursor = digit_end+1;
+        atom_type = STRING;
+        
+    } else {
+        // regular symbol.
+        delims = "\0 ()[]\"";
+        num_delims = 7;
+        atom_type = SYMBOL;
+    }
+
+    size_t i;
+    for (i = 0;
+         memchr(delims, *cursor, num_delims) == 0 && *cursor != '\0';
+         cursor++, i++);
+
+    // the string ended without finding a terminating delimeter.
+    if (memchr(delims, *cursor, num_delims) == 0) {
+        error.error_location = cursor;
+        return error;
+    }
+
+    if (!dryrun) {
+        switch (atom_type) {
+        case SPECIAL_SYMBOL:
+        case SYMBOL:
+            sexp->type = SEXP_SYMBOL;
+            break;
+        case STRING:
+            sexp->type = SEXP_STRING;
+            break;
+        }
+
+        sexp->length = i;
+
+        memcpy(sexp->data, cursor - i, i);
+        if (atom_type == SYMBOL)
+            for (u8* c = sexp->data; c < sexp->data + i; c++)
+                *c = toupper(*c);
+    }
+
+    // skip past the terminator, unless this is a regular symbol.
+    *caller_cursor = atom_type == SYMBOL ? cursor : cursor + 1;
+    return result_ok(i + sizeof(struct sexp));
 }
 
-s64 sexp_read_tagged_atom(u8** tag, vector* sexp) {
-    size_t sexp_start = vec_len(sexp);
-    u8* cursor = *tag;
+struct reader_result
+sexp_read_tagged_atom(const char** caller_cursor,
+                      struct sexp* sexp,
+                      bool dryrun) {
+    const char* cursor = *caller_cursor;
 
-    // push the prefix on now, before pushing the tag and atom on.
-    // we will have to update it later.
-    size_t prefix_idx = sexp_push_prefix(sexp, SEXP_TAGGED_ATOM, 0);
-    
     // read the atom inside the tag and move the cursor past it.  This also puts
     // the atom in the sexp object.
     //
     // 1:SEXP_TAGGED_ATOM 4:LENGTH
     //         1:SEXP_ATOM 4:TAG_LENGTH TAG_LENGTH:TAG
-    
-    // ([3:foo]3:bar)  ->  ([3:foo]3:bar)
-    // ~~⬆~~~~~~~~~~~  ->  ~~~~~~~⬆~~~~~~
-    s64 tag_length = sexp_read_atom(&cursor, sexp);
-    if (tag_length < 0)
-        return -1;
+
+    // ([ 3:foo ]3:bar)  ->  ([ 3:foo ]3:bar)
+    // ~~⬆~~~~~~~~~~~~~  ->  ~~~~~~~~⬆~~~~~~~
+    struct reader_result result;
+    result = sexp_read_atom(&cursor,
+                            sexp == NULL ? NULL : (struct sexp*)sexp->data,
+                            dryrun);
+
+    if (result.status == RESULT_ERR)
+        return result_err(RESULT_TAG_MISSING_TAG, result.error_location);
+    else if (result.status != RESULT_OK)
+        return result;
+
+    size_t tag_length = result.length;
+
+    while(isspace(*cursor)) cursor++;
 
     // make sure the tag is closed.  Error if not.
-    while(isspace(*cursor)) cursor++;
     if (*cursor != ']')
-        return -1;
+        return result_err(RESULT_TAG_NOT_CLOSED, cursor);
 
     // move past the tag to the atom.
-    // ([3:foo]3:bar)  ->  ([3:foo]3:bar)
-    // ~~~~~~~⬆~~~~~~  ->  ~~~~~~~~⬆~~~~~
+    // ([ 3:foo ]3:bar)  ->  ([ 3:foo ]3:bar)
+    // ~~~~~~~~~⬆~~~~~~  ->  ~~~~~~~~~~⬆~~~~~
     cursor++;
 
     // read the atom associated with the tag.  This will move the cursor and
@@ -98,236 +179,487 @@ s64 sexp_read_tagged_atom(u8** tag, vector* sexp) {
     //         1:SEXP_ATOM 4:TAG_LENGTH TAG_LENGTH:TAG
     //         1:SEXP_ATOM 4:ATOM_LENGTH ATOM_LENGTH:ATOM
     //
-    // ([3:foo]3:bar)  ->  ([3:foo]3:bar)
-    // ~~~~~~~~⬆~~~~~  ->  ~~~~~~~~~~~~~⬆
-    s64 atom_length = sexp_read_atom(&cursor, sexp);
-    if (atom_length < 0)
-        return -1;
+    // ([ 3:foo ]3:bar)  ->  ([ 3:foo ]3:bar)
+    // ~~~~~~~~~~⬆~~~~~  ->  ~~~~~~~~~~~~~~~⬆
+    result = sexp_read_atom(&cursor,
+                            sexp == NULL ? NULL :
+                                        (struct sexp*)(sexp->data + tag_length),
+                            dryrun);
 
-    u32 total_length = tag_length + atom_length;
+    if (result.status == RESULT_ERR)
+        return result_err(RESULT_TAG_MISSING_SYMBOL, result.error_location);
+    else if (result.status != RESULT_OK)
+        return result;
 
-    // update total length in object.
-    sexp_get_prefix(sexp, prefix_idx)->length = total_length;
+    size_t atom_length = result.length;
 
-    // update the callers cursor
-    *tag = cursor;
-    return vec_len(sexp) - sexp_start;
+    if (!dryrun && sexp != NULL) {
+        sexp->length = tag_length + atom_length;
+        sexp->type = SEXP_TAG;        
+    }
+
+    // udate caller cursor, and return length in of sexp (in memory)
+    *caller_cursor = cursor;
+    return result_ok(sizeof(struct sexp) + tag_length + atom_length);
 }
 
+struct reader_result
+sexp_reader(const char **sexp_str, struct sexp *sexp, bool dryrun);
 
 // list points to the first item in the list
-s64 sexp_read_list(u8** list, vector* sexp) {
-    u8* cursor = *list;
+struct reader_result
+sexp_read_list(const char** caller_cursor, struct sexp* sexp, bool dryrun) {
+    const char* cursor = *caller_cursor;
 
-    size_t list_prefix = sexp_push_prefix(sexp, SEXP_LIST, 0);
-    
-    size_t sexp_start = vec_len(sexp);
-    
+    // list length in memory
+    size_t list_length = 0;
     while (true) {
-        while (isspace(*cursor)) cursor++; // skip leading whitespace
+        while (isspace(*cursor) && *cursor != '\0') cursor++; // skip leading whitespace
 
-        s64 item_length;
-        
-        switch (*cursor) {
-        case '(':
-            // ITEM IS A LIST
-            cursor++; // point to first item in sub-list
-            item_length = sexp_read_list(&cursor, sexp);
-            break;
-        case '[':
-            // ITEM IS A TAGGED ATOM
+        // see the the character under the cursor indicates the end of the list
+        if (*cursor == ')') {
+            if (!dryrun && sexp != NULL) {
+                sexp->length = list_length;
+                sexp->type = SEXP_LIST;
+            }
+
             cursor++;
-            item_length = sexp_read_tagged_atom(&cursor, sexp);
-            break;
-            
-        case ')':
-            // RETURN CONDITION
-            vec_push(sexp, "\0");
-            *list = cursor+1; // set the callers cursor to their next item.
-
-            // update list length tracker
-            sexp_get_prefix(sexp, list_prefix)->length =
-                vec_len(sexp) - sexp_start;
-
-            return vec_len(sexp) - sexp_start;
-        case '\0':
-            return -1;
-
-        default:
-            // ITEM IS AN ATOM
-            item_length = sexp_read_atom(&cursor, sexp);
+            *caller_cursor = cursor;
+            return result_ok(list_length + sizeof(struct sexp));
         }
+        if (*cursor == '\0')
+            return result_err(RESULT_LIST_NOT_CLOSED, cursor);
+
+        // read the next element in the list
+        struct reader_result result;
+        result = sexp_reader(&cursor,
+                             sexp == NULL ? NULL : (struct sexp*)(sexp->data + list_length),
+                             dryrun);
         
-        if (item_length < 0 || item_length > 0xffffffff)
-            return -1;
+        if (result.status != RESULT_OK)
+            return result;
+
+        // append the length of that item to the total list length
+        list_length += result.length;
     }
 }
 
-
-vector* sexp_read(const u8* sexp_str) {
-    vector* sexp = make_vector(sizeof(u8), 100);
-    
+struct reader_result
+sexp_reader(const char** caller_cursor, struct sexp* sexp, bool dryrun) {
+    const char* cursor = *caller_cursor;
     // CURRENTLY ONLY SUPPORT CANONICAL TRANSPORT MODE
-    while (isspace(*sexp_str)) sexp_str++;
+    while (isspace(*cursor) && *cursor != '\0') cursor++;
 
-    switch (*sexp_str) {
+    struct reader_result result;
+    switch (*cursor) {
     case '(':
         // these functions don't modify the data at sexp.
-        sexp_str++;
-        sexp_read_list((u8**)&sexp_str, sexp);
+        cursor++;
+        result = sexp_read_list(&cursor,
+                                sexp,
+                                dryrun);
         break;
     case '[':
-        // these functions don't modify the data at sexp.
-        sexp_str++;
-        sexp_read_tagged_atom((u8**)&sexp_str, sexp);
+        // these functions don't modify the data at
+        cursor++;
+        result = sexp_read_tagged_atom(&cursor,
+                                       sexp,
+                                       dryrun);
         break;
 
-    case ')':
     case ']':
-        goto exit_bad_format;
+        return result_err(RESULT_INVALID_CHARACTER, cursor);
 
     default:
         // these functions don't modify the data at sexp.
-        sexp_read_atom((u8**)&sexp_str, sexp);
+        result = sexp_read_atom(&cursor,
+                                sexp,
+                                dryrun);
     }
 
+    if (result.status != RESULT_OK)
+        return result;
+
+    *caller_cursor = cursor;
+    return result;
+}
+
+struct reader_result
+sexp_read(const char* sexp_str, struct sexp* sexp, bool dryrun) {
+    while (isspace(*sexp_str) && *sexp_str != '\0') sexp_str++;
+    if (*sexp_str == ')')
+        return result_err(RESULT_INVALID_CHARACTER, sexp_str);
+
+    struct reader_result result = sexp_reader(&sexp_str, sexp, dryrun);
+
+    if (result.status != RESULT_OK)
+        return result;
+    
     // fail if their is trailing garbage.
-    while (isspace(*sexp_str)) sexp_str++;
+    while (isspace(*sexp_str) && *sexp_str != '\0') sexp_str++;
     if (*sexp_str != '\0')
-        goto exit_bad_format;
-    
-    return sexp;
+        return result_err(RESULT_TRAILING_GARBAGE, sexp_str);
 
- exit_bad_format:
-    free_vector(sexp);
-    return NULL;
- }
-
-
-// returns the index of the next sexp in the object.
-// TODO add bounds checking
-size_t sexp_get_next_idx(vector* sexp, size_t sexp_idx) {
-    return
-        sexp_idx +
-        sizeof(struct sexp_prefix) +
-        sexp_get_prefix(sexp, sexp_idx)->length;
+    return result;
 }
 
-struct sexp_prefix* sexp_get_next_prefix(vector* sexp, size_t sexp_idx) {
-    size_t next_idx = sexp_get_next_idx(sexp, sexp_idx);
-    
-    return (struct sexp_prefix*)vec_ref(sexp, next_idx);
+////////////////////////////////////////////////////////////////////////////////
+// SEXP PRINTER FUNCTIONS //////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
+
+const struct sexp*
+sexp_tag_get_tag(const struct sexp* sexp) {
+    if (sexp == NULL || sexp->type != SEXP_TAG)
+        return NULL;
+
+    return (struct sexp*)sexp->data;
 }
 
-// gets the index of the next sexp, if it is a list
-size_t sexp_list_first(vector* sexp, size_t sexp_idx) {
-    enum sexp_type type = sexp_get_prefix(sexp, sexp_idx)->type;
-
-    if (type != SEXP_LIST)
-        return sexp_idx;
-
-    return sexp_idx + sizeof(struct sexp_prefix);
-}
-
-size_t sexp_tag_get_tag(vector* sexp, size_t sexp_idx) {
-    enum sexp_type type = sexp_get_prefix(sexp, sexp_idx)->type;
-
-    if (type != SEXP_TAGGED_ATOM)
-        return sexp_idx;
-
-    return sexp_idx + sizeof(struct sexp_prefix);
-}
-
-size_t sexp_tag_get_atom(vector* sexp, size_t sexp_idx) {
-    struct sexp_prefix* prefix = sexp_get_prefix(sexp, sexp_idx);
-
-    if (prefix->type != SEXP_TAGGED_ATOM)
-        return sexp_idx;
-
-    struct sexp_prefix* tag =
-        sexp_get_prefix(sexp, sexp_tag_get_tag(sexp, sexp_idx));
+const struct sexp*
+sexp_tag_get_atom(const struct sexp* sexp) {
+    if (sexp == NULL || sexp->type != SEXP_TAG)
+        return NULL;
 
     // ⬇~~~~~~~~~~~~~~
     // TYPE-TAG LENGTH
     //         TYPE-ATOM LENGTH CONTENTS
-    //       ⮕TYPE-ATOM LENGTH CONTENTS
-
-    // skip the space from the overarching tag type prefix, the tag prefix, and
-    // the tag length.
-
-    return sexp_idx + 2*sizeof(struct sexp_prefix) + tag->length;
+    //      -> TYPE-ATOM LENGTH CONTENTS
+    const struct sexp* tag = sexp_tag_get_tag(sexp);
+    return (struct sexp*)(tag->data + tag->length);
 }
 
-size_t sexp_atom_fprint(FILE* f, vector* sexp, size_t idx) {
-    size_t len = sexp_get_prefix(sexp, idx)->length;
+s32
+sexp_string_fprint(const struct sexp* sexp, FILE* f) {
+    if (sexp == NULL || sexp->type != SEXP_STRING)
+        return -1;
 
-    u8* atom_txt = vec_ref(sexp, idx + sizeof(struct sexp_prefix));
+    fprintf(f, "\"%.*s\"", sexp->length, sexp->data);
+    return 0;
+}
+
+s32
+sexp_integer_fprint(const struct sexp* sexp, FILE* f) {
+    if (sexp == NULL || sexp->type != SEXP_INTEGER)
+        return -1;
+
+    fprintf(f, "%d", *(u32*)sexp->data);
+    return 0;
+}
+
+s32
+sexp_symbol_fprint(const struct sexp* sexp, FILE* f) {
+    if (sexp == NULL || sexp->type != SEXP_SYMBOL)
+        return -1;
+
+    enum print_type {
+        PRINT_NORMAL,
+        PRINT_SPECIAL,
+        PRINT_NETSTRING,
+    } print_type = PRINT_NORMAL;
+
+    for (const u8* c = sexp->data;  c < sexp->data + sexp->length; c++) {
+        if (isspace(*c) || islower(*c)) {
+            print_type = PRINT_SPECIAL;
+            break;
+        }
+
+        if (*c == '|') {
+            print_type = PRINT_NETSTRING;
+            break;
+        }
+    }
+
+    switch (print_type) {
+    case PRINT_NORMAL:
+        fprintf(f, "%.*s", sexp->length, sexp->data);
+        break;
+    case PRINT_SPECIAL:
+        fprintf(f, "|%.*s|", sexp->length, sexp->data);
+        break;
+    case PRINT_NETSTRING:
+        fprintf(f, "%d:%.*s", sexp->length, sexp->length, sexp->data);
+        break;
+    }
+
+    return 0;
+}
+
+s32
+sexp_tagged_atom_fprint(const struct sexp* sexp, FILE* f) {
+    if (sexp == NULL || sexp->type != SEXP_TAG)
+        return -1;
+
+    s32 ret;
+
+    fputc('[', f);
+    const struct sexp* tag = sexp_tag_get_tag(sexp);
+    ret = sexp_symbol_fprint(tag, f);
+    if (ret == -1)
+        return ret;
     
-    char tmp[len];
-    for (size_t i = 0; i < len; i++) tmp[i] = toupper(atom_txt[i]);
+    fputc(']', f);
 
-    fprintf(f, "%.*s", (s32)len, tmp);
+    const struct sexp* atom = sexp_tag_get_atom(sexp);
+    ret = sexp_symbol_fprint(atom, f);
+    if (ret == -1)
+        return ret;
 
-    return sexp_get_next_idx(sexp, idx);
+    return 0;
 }
 
-size_t sexp_tagged_atom_fprint(FILE* f, vector* sexp, size_t idx) {
-    fprintf(f, "[");
-    size_t tag_idx = sexp_tag_get_tag(sexp, idx);
-    sexp_atom_fprint(f, sexp, tag_idx);
-    fprintf(f, "]");
+s32
+sexp_fprinter(const struct sexp*, FILE*);
 
-    size_t atom_idx = sexp_tag_get_atom(sexp, idx);
-    sexp_atom_fprint(f, sexp, atom_idx);
-
-    return sexp_get_next_idx(sexp, idx);
-}
-
-size_t sexp_list_fprint(FILE* f, vector* sexp, size_t idx) {
+s32
+sexp_list_fprint(const struct sexp* sexp, FILE* f) {
+    if (sexp == NULL || sexp->type != SEXP_LIST)
+        return -1;
+    if (sexp->length == 0) {
+        fprintf(f, "()");
+        return 0;
+    }
+        
     fprintf(f, "(");
-
-    size_t next_item = sexp_list_first(sexp, idx);
+    
+    size_t n = 0;
+    const struct sexp* element = sexp_nth(sexp, 0);
     while (true) {
-        switch (sexp_get_prefix(sexp, next_item)->type) {
-        case SEXP_ATOM:
-            next_item = sexp_atom_fprint(f, sexp, next_item);
+        if (sexp_fprinter(element, f) == -1)
+            return -1;
+
+        element = sexp_nth(sexp, ++n);
+        if (element == NULL)
             break;
-        case SEXP_TAGGED_ATOM:
-            next_item = sexp_tagged_atom_fprint(f, sexp, next_item);
-            break;
-        case SEXP_LIST:
-            next_item = sexp_list_fprint(f, sexp, next_item);
-        break;
+
+        fputc(' ', f);
     }
 
-        if (next_item >= idx + sexp_get_prefix(sexp, idx)->length)
-            break;
-
-        fprintf(f, " ");
-    }
-
-    fprintf(f, ")");
-    return sexp_get_next_idx(sexp, idx);
+    fputc(')', f);
+    return 0;
 }
 
-void sexp_fprint(FILE* f, vector* sexp) {
-    enum sexp_type type = sexp_get_prefix(sexp, 0)->type;
-
-    switch (type) {
-    case SEXP_ATOM:
-        sexp_atom_fprint(f, sexp, 0);
+s32
+sexp_fprinter(const struct sexp* sexp, FILE* f) {
+    if (sexp == NULL)
+        return -1;
+    
+    s32 ret;
+    switch (sexp->type) {
+    case SEXP_SYMBOL:
+        ret = sexp_symbol_fprint(sexp, f);
         break;
-    case SEXP_TAGGED_ATOM:
-        sexp_tagged_atom_fprint(f, sexp, 0);
+    case SEXP_INTEGER:
+        ret = sexp_integer_fprint(sexp, f);
+        break;
+    case SEXP_STRING:
+        ret = sexp_string_fprint(sexp, f);
+        break;
+    case SEXP_TAG: 
+        ret = sexp_tagged_atom_fprint(sexp, f);
         break;
     case SEXP_LIST:
-        sexp_list_fprint(f, sexp, 0);
+        ret = sexp_list_fprint(sexp, f);
         break;
     }
 
-    fprintf(f, "\n");
+    return ret;
 }
 
-void sexp_print(vector* sexp) {
-    sexp_fprint(stdout, sexp);
+s32
+sexp_fprint(const struct sexp* sexp, FILE* f) {
+    s32 ret = sexp_fprinter(sexp, f);
+    fputc('\n', f);
+    return ret;
+}
+
+
+s32
+sexp_print(const struct sexp* sexp) {
+    return sexp_fprint(sexp, stdout);
+}
+
+
+s32
+sexp_serialize_symbol(const struct sexp *sexp, char *buffer, size_t size) {
+    if (sexp == NULL || sexp->type != SEXP_SYMBOL)
+        return -1;
+
+    return snprintf(buffer, size, "%.*s", sexp->length, sexp->data);
+}
+
+s32
+sexp_serialize_tag(const struct sexp *sexp, char *buffer, size_t size) {
+    if (sexp == NULL || sexp->type != SEXP_TAG)
+        return -1;
+
+    const struct sexp* tag = sexp_tag_get_tag(sexp);
+    const struct sexp* atom = sexp_tag_get_atom(sexp);
+    
+    return snprintf(buffer, size, "[%.*s]%.*s",
+                    tag->length, tag->data,
+                    atom->length, atom->data);
+}
+    
+s32
+sexp_serialize_string(const struct sexp *sexp, char *buffer, size_t size) {
+    if (sexp == NULL || sexp->type != SEXP_STRING)
+        return -1;
+
+    return snprintf(buffer, size, "\"%s\"", (char*)sexp->data);
+}
+
+s32
+sexp_serialize_integer(const struct sexp *sexp, char *buffer, size_t size) {
+    if (sexp == NULL || sexp->type != SEXP_INTEGER)
+        return -1;
+
+    return snprintf(buffer, size, "%d", *(u32*)sexp->data);
+}
+
+s32
+sexp_serialize_list(const struct sexp *sexp, char *buffer, size_t size) {
+    if (buffer == NULL && size != 0)
+        return -1;
+    
+    if (sexp == NULL || sexp->type != SEXP_LIST)
+        return -1;
+    
+    if (sexp->length < sizeof(struct sexp))
+        return snprintf(buffer, size, "()");
+
+    size_t list_len = 1;
+    snprintf(buffer, size, "(");
+    
+    struct sexp* element = (struct sexp*)sexp->data;
+    while (element < (struct sexp*)(sexp->data + sexp->length)) {
+        size_t tmp = 0;
+
+        // case that nothing is written to buffer.
+        if (size == 0  && buffer == NULL)
+            tmp = sexp_serialize(element, NULL, 0);
+        else if (list_len < size) 
+            // don't write anything if there isn't enough space left in the buffer.
+            tmp = sexp_serialize(element, buffer + list_len, size-list_len);
+        else
+            return list_len;
+
+        if (tmp < 0)
+            return -1;
+
+        list_len += tmp;
+
+        element = (struct sexp*)(element->data + element->length);
+
+        if (element < (struct sexp*)(sexp->data + sexp->length)) {
+            if (size != 0  && buffer != NULL && list_len < size)
+                snprintf(buffer+list_len, size-list_len, " ");
+            
+            list_len++;
+        }
+    }
+
+    if  (list_len < size)
+        snprintf(buffer+list_len, size-list_len, ")");
+    
+    list_len += 1;
+        
+    return list_len;
+}
+
+s32
+sexp_serialize(const struct sexp* sexp, char* buffer, size_t size) {
+    // this function should return the number of bytes written to the buffer.
+    // If buffer is NULL, then no bytes are written.  If buffer is NULL and size
+    // is 0, no bytes are written, but the function will return the number of
+    // bytes that would have been written if the buffer existed.
+    if (sexp == NULL)
+        return -1;
+
+    switch (sexp->type) {
+    case SEXP_LIST:
+        return sexp_serialize_list(sexp, buffer, size);
+    case SEXP_SYMBOL:
+        return sexp_serialize_symbol(sexp, buffer, size);
+    case SEXP_INTEGER:
+        return sexp_serialize_integer(sexp, buffer, size);
+    case SEXP_TAG:
+        return sexp_serialize_tag(sexp, buffer, size);
+    case SEXP_STRING:
+        return sexp_serialize_string(sexp, buffer, size);
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// SEXP UTILITIES //////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
+
+const struct sexp*
+sexp_nth(const struct sexp* sexp, size_t n) {
+    if (sexp == NULL || sexp->type != SEXP_LIST || sexp->length <= 0)
+        return NULL;
+
+    struct sexp* element = (struct sexp*)sexp->data;
+    for (size_t i = 0; i < n; i++) {
+        element = (struct sexp*)(element->data + element->length);
+        if ((void*)element >= (void*)(sexp->data + sexp->length))
+            return NULL;
+    }
+
+    return element;
+}
+
+struct sexp*
+sexp_append(struct sexp* dst, const struct sexp* src) {
+    if (dst == NULL || src == NULL || dst->type != SEXP_LIST)
+        return NULL;
+
+    struct sexp* element = (struct sexp*)(dst->data + dst->length);
+    memcpy(element, src, sizeof(struct sexp) + src->length);
+
+    dst->length += sizeof(struct sexp) + src->length;
+
+    return element;
+}
+
+struct sexp*
+sexp_append_dat(struct sexp* dst, void* dat, size_t len, enum sexp_type type) {
+    if (dst == NULL || dst->type != SEXP_LIST)
+        return NULL;
+
+    if (type != SEXP_LIST && dat == NULL)
+        return NULL;
+
+    if (type == SEXP_INTEGER && len != sizeof(u32)) {
+        printf("ERROR: SEXP unsupported integer size: %zu", len);
+        return NULL;
+    }
+
+    struct sexp* element = (struct sexp*)(dst->data + dst->length);
+
+    if (type != SEXP_LIST)
+        memcpy(element->data, dat, len);
+
+    element->length = len;
+    element->type = type;
+
+    dst->length += sizeof(struct sexp) + len;
+
+    return element;
+}
+
+size_t
+sexp_length(const struct sexp* sexp) {
+    if (sexp == NULL || sexp->type != SEXP_LIST)
+        return 0;
+
+    
+    struct sexp* element = (struct sexp*)(sexp->data);
+
+    size_t n = 0;
+    while (element < (struct sexp*)(sexp->data + sexp->length)) {
+        n++;
+        element = (struct sexp*)(element->data + element->length);
+    }
+
+    return n;
 }
