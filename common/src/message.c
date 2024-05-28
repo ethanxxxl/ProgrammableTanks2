@@ -2,6 +2,7 @@
 #include "scenario.h"
 #include "vector.h"
 #include "nonstdint.h"
+#include "csexp.h"
 
 
 #include <fcntl.h>
@@ -196,6 +197,7 @@ int message_send_conf(int fd, enum message_type type, const char *text) {
     return header_len + body_len;
 }
 
+
 /* TEXT_FNS
  * */
 void text_ser(const struct message* msg, struct vector* dat) {
@@ -315,7 +317,7 @@ void player_update_free(struct message *msg) {
 
 /* SCENARIO_TICK
  */
-void scenario_tick_ser(const struct message *msg, struct vector *dat) {
+void _scenario_tick_ser(const struct message *msg, struct vector *dat) {
     struct vector* players_data = msg->scenario_tick.players_public_data;
 
     // USERNAMES section
@@ -356,7 +358,7 @@ void scenario_tick_ser(const struct message *msg, struct vector *dat) {
     return;
 }
 
-void scenario_tick_des(struct message *msg, const struct vector *dat) {
+void _scenario_tick_des(struct message *msg, const struct vector *dat) {
     struct vector* players_data = msg->scenario_tick.players_public_data;
     // USERNAMES section
     size_t num_tanks_offset = 0;
@@ -420,6 +422,108 @@ void scenario_tick_free(struct message *msg) {
     free_vector(players_data);
     return;
 }
+
+
+void scenario_tick_ser(const struct message* msg, vector* dat) {
+    if (msg->type != MSG_RESPONSE_SCENARIO_TICK)
+        return;
+
+    vector* public_data = msg->scenario_tick.players_public_data;
+
+    // 1. Determine How Large Your Vector Needs to Be
+    size_t buffer_len = sizeof(struct sexp);
+    for (size_t n = 0; n < vec_len(public_data); n++) {
+        struct player_public_data* p = vec_ref(public_data, n);
+
+        // length of the username symbol
+        buffer_len += sizeof(struct sexp) + vec_len(p->username);
+
+        // size of the sub list
+        buffer_len += sizeof(struct sexp);
+
+        // size of the sub list elements
+        buffer_len += vec_len(p->tank_positions)
+            * (sizeof(struct sexp) + sizeof(u32))
+            * 2;
+
+    }
+
+    // 2. Initialize the Vector/Sexp
+    u8 sexp_buffer[buffer_len];
+    struct sexp* sexp = (struct sexp*)sexp_buffer;
+        
+    sexp->type = SEXP_LIST;
+    sexp->length = 0;
+
+    // 3. Copy the data from the message to the S Expression
+    for (size_t n = 0; n < vec_len(public_data); n++) {
+        struct player_public_data* p = vec_ref(public_data, n);
+        
+        sexp_append_dat(sexp, vec_dat(p->username), vec_len(p->username),
+                        SEXP_STRING);
+
+        struct sexp* player_dat = sexp_append_dat(sexp, NULL, 0, SEXP_LIST);
+        for (size_t t = 0; t < vec_len(p->tank_positions); t++) {
+            struct coord* pos = vec_ref(p->tank_positions, t);
+
+            sexp_append_dat(player_dat, &pos->x, sizeof(u32), SEXP_INTEGER);
+            sexp_append_dat(player_dat, &pos->y, sizeof(u32), SEXP_INTEGER);
+        }
+
+        sexp->length += player_dat->length;
+    }    
+
+    // 4. reserve space for serialized data
+    size_t serialize_len = sexp_serialize(sexp, NULL, 0);
+
+    size_t initial_len = vec_len(dat);
+    vec_resize(dat, initial_len + serialize_len + 1);
+
+    sexp_serialize(sexp, vec_ref(dat, initial_len), serialize_len+1);
+
+    return;
+}
+
+void scenario_tick_des(struct message* msg, const vector* sexp_data) {
+    struct reader_result r = sexp_read(vec_dat((vector*)sexp_data), NULL, true);
+    if (r.status != RESULT_OK) {
+        printf("MALFORMED MESSAGE: %s\n%s\n",
+               G_READER_RESULT_TYPE_STR[r.status],
+               r.error_location);
+        return;
+    }
+
+    u8 sexp_buffer[r.length];
+    struct sexp* sexp = (struct sexp*)sexp_buffer;
+    
+    sexp_read(vec_dat((vector*)sexp_data), sexp, false);
+    
+    for (u32 i = 0; i < sexp_length(sexp); i++) {
+        const struct sexp* username = sexp_nth(sexp, i++);
+
+        struct player_public_data public_data;
+        public_data.username = make_vector(sizeof(char), username->length);
+        vec_pushn(public_data.username, username->data, username->length);
+
+        const struct sexp* tank_positions = sexp_nth(sexp, i);
+
+        public_data.tank_positions = make_vector(sizeof(struct coord),
+                                                 tank_positions->length/2);
+
+        for (u32 t = 0; t < sexp_length(tank_positions); t+=2) {
+            struct coord pos = {
+                .x  = *(u32*)sexp_nth(tank_positions, t)->data,
+                .y = *(u32*)sexp_nth(tank_positions, t+1)->data,             
+            };
+
+            vec_push(public_data.tank_positions, &pos);
+        }
+
+        vec_push(msg->scenario_tick.players_public_data, &public_data);
+    }
+}
+
+
 
 static const char *message_type_labels[] = {
     [MSG_REQUEST_AUTHENTICATE] = "MSG_REQUEST_AUTHENTICATE",

@@ -25,6 +25,10 @@ result_ok(size_t length) {
         .length = length};
 }
 
+////////////////////////////////////////////////////////////////////////////////
+// SEXP READER FUNCTIONS ///////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
+
 struct reader_result
 sexp_read_atom(const char** caller_cursor, struct sexp* sexp, bool dryrun) {
     const char* cursor = *caller_cursor;
@@ -58,10 +62,7 @@ sexp_read_atom(const char** caller_cursor, struct sexp* sexp, bool dryrun) {
 
         *caller_cursor = digit_end + atom_len + 1;
         return result_ok(sizeof(struct sexp) + atom_len);
-    } else if (digit_end != cursor && *digit_end != ':') {
-        return result_err(RESULT_NETSTRING_MISSING_COLON, digit_end);
-        
-    } else if (digit_end != cursor && isspace(*digit_end)) {
+    }  else if (digit_end != cursor && (isspace(*digit_end) || *digit_end == ')')) {
         // symbol is a number
         if (!dryrun) {
             sexp->type = SEXP_INTEGER;
@@ -71,6 +72,9 @@ sexp_read_atom(const char** caller_cursor, struct sexp* sexp, bool dryrun) {
 
         *caller_cursor = digit_end;
         return result_ok(sizeof(struct sexp) + sizeof(u32));
+    } else if (digit_end != cursor && *digit_end != ':') {
+        return result_err(RESULT_NETSTRING_MISSING_COLON, digit_end);
+        
     } else if (*digit_end == '|') {
         // symbol is an escaped symbol
         delims = "|";
@@ -129,56 +133,6 @@ sexp_read_atom(const char** caller_cursor, struct sexp* sexp, bool dryrun) {
     // skip past the terminator, unless this is a regular symbol.
     *caller_cursor = atom_type == SYMBOL ? cursor : cursor + 1;
     return result_ok(i + sizeof(struct sexp));
-}
-   
-
-struct reader_result
-_sexp_read_atom(const char** caller_cursor, struct sexp* sexp, bool dryrun) {
-    const char* cursor = *caller_cursor;
-    
-    while (isspace(*cursor) && *cursor != '\0') cursor++;
-    if (*cursor == '\0')
-        return result_ok(0);
-
-    if (isdigit(*cursor)) {
-    } else if (*cursor == '"') {
-        
-    }
-        
-
-    // ([3:gif] 250:xxxxxx 3:foo)
-    // ~~~~~~~~~^~~~~~~~~~~~~~~~~
-    const char* digit_end = cursor;
-    u32 atom_len = strtoul((char*)cursor, (char**)&digit_end, 10);
-
-    // strtoul will set digit_end to cursor if no conversion was performed.
-    // that is, this is not a netstring.
-    if (digit_end == cursor)
-        return result_err(RESULT_BAD_NETSTRING_LENGTH, cursor);
-
-    // ensure that the colon is present, then skip past it.
-    // ([3:gif] 250:xxxxxx 3:foo)
-    // ~~~~~~~~~~~~^~~~~~~~~~~~~~
-    cursor = digit_end;
-    if (*cursor != ':')
-        return result_err(RESULT_NETSTRING_MISSING_COLON, cursor);
-    cursor++;
-
-    // if this isn't a dryrun...
-    if (!dryrun && sexp != NULL) {
-        sexp->length = atom_len;
-        sexp->type = SEXP_SYMBOL;
-        memcpy(sexp->data, cursor, atom_len);
-    } else if (!dryrun && sexp == NULL) {
-        return result_err(RESULT_NULL_SEXP_PARAMETER, NULL);
-    }
-
-    // return length of atom in memory, and update the caller cursor.
-    // ([3:gif] 250:xxxxxx 3:foo)
-    // ~~~~~~~~~~~~~~~~~~~^~~~~~~
-    cursor += atom_len;
-    *caller_cursor = cursor;
-    return result_ok(sizeof(struct sexp) + atom_len);
 }
 
 struct reader_result
@@ -349,28 +303,20 @@ sexp_read(const char* sexp_str, struct sexp* sexp, bool dryrun) {
     return result;
 }
 
-const struct sexp* sexp_nth(const struct sexp* sexp, size_t n) {
-    if (sexp == NULL || sexp->type != SEXP_LIST || sexp->length <= 0)
-        return NULL;
+////////////////////////////////////////////////////////////////////////////////
+// SEXP PRINTER FUNCTIONS //////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
 
-    struct sexp* element = (struct sexp*)sexp->data;
-    for (size_t i = 0; i < n; i++) {
-        element = (struct sexp*)(element->data + element->length);
-        if ((void*)element >= (void*)(sexp->data + sexp->length))
-            return NULL;
-    }
-
-    return element;
-}
-
-const struct sexp* sexp_tag_get_tag(const struct sexp* sexp) {
+const struct sexp*
+sexp_tag_get_tag(const struct sexp* sexp) {
     if (sexp == NULL || sexp->type != SEXP_TAG)
         return NULL;
 
     return (struct sexp*)sexp->data;
 }
 
-const struct sexp* sexp_tag_get_atom(const struct sexp* sexp) {
+const struct sexp*
+sexp_tag_get_atom(const struct sexp* sexp) {
     if (sexp == NULL || sexp->type != SEXP_TAG)
         return NULL;
 
@@ -382,7 +328,8 @@ const struct sexp* sexp_tag_get_atom(const struct sexp* sexp) {
     return (struct sexp*)(tag->data + tag->length);
 }
 
-s32 sexp_string_fprint(const struct sexp* sexp, FILE* f) {
+s32
+sexp_string_fprint(const struct sexp* sexp, FILE* f) {
     if (sexp == NULL || sexp->type != SEXP_STRING)
         return -1;
 
@@ -390,15 +337,17 @@ s32 sexp_string_fprint(const struct sexp* sexp, FILE* f) {
     return 0;
 }
 
-s32 sexp_integer_fprint(const struct sexp* sexp, FILE* f) {
+s32
+sexp_integer_fprint(const struct sexp* sexp, FILE* f) {
     if (sexp == NULL || sexp->type != SEXP_INTEGER)
         return -1;
 
-    fprintf(f, "\"%d\"", *(u32*)sexp->data);
+    fprintf(f, "%d", *(u32*)sexp->data);
     return 0;
 }
 
-s32 sexp_symbol_fprint(const struct sexp* sexp, FILE* f) {
+s32
+sexp_symbol_fprint(const struct sexp* sexp, FILE* f) {
     if (sexp == NULL || sexp->type != SEXP_SYMBOL)
         return -1;
 
@@ -435,7 +384,8 @@ s32 sexp_symbol_fprint(const struct sexp* sexp, FILE* f) {
     return 0;
 }
 
-s32 sexp_tagged_atom_fprint(const struct sexp* sexp, FILE* f) {
+s32
+sexp_tagged_atom_fprint(const struct sexp* sexp, FILE* f) {
     if (sexp == NULL || sexp->type != SEXP_TAG)
         return -1;
 
@@ -457,9 +407,11 @@ s32 sexp_tagged_atom_fprint(const struct sexp* sexp, FILE* f) {
     return 0;
 }
 
-s32 sexp_fprinter(const struct sexp*, FILE*);
+s32
+sexp_fprinter(const struct sexp*, FILE*);
 
-s32 sexp_list_fprint(const struct sexp* sexp, FILE* f) {
+s32
+sexp_list_fprint(const struct sexp* sexp, FILE* f) {
     if (sexp == NULL || sexp->type != SEXP_LIST)
         return -1;
     if (sexp->length == 0) {
@@ -486,7 +438,8 @@ s32 sexp_list_fprint(const struct sexp* sexp, FILE* f) {
     return 0;
 }
 
-s32 sexp_fprinter(const struct sexp* sexp, FILE* f) {
+s32
+sexp_fprinter(const struct sexp* sexp, FILE* f) {
     if (sexp == NULL)
         return -1;
     
@@ -512,13 +465,201 @@ s32 sexp_fprinter(const struct sexp* sexp, FILE* f) {
     return ret;
 }
 
-s32 sexp_fprint(const struct sexp* sexp, FILE* f) {
+s32
+sexp_fprint(const struct sexp* sexp, FILE* f) {
     s32 ret = sexp_fprinter(sexp, f);
     fputc('\n', f);
     return ret;
 }
 
 
-s32 sexp_print(const struct sexp* sexp) {
+s32
+sexp_print(const struct sexp* sexp) {
     return sexp_fprint(sexp, stdout);
+}
+
+
+s32
+sexp_serialize_symbol(const struct sexp *sexp, char *buffer, size_t size) {
+    if (sexp == NULL || sexp->type != SEXP_SYMBOL)
+        return -1;
+
+    return snprintf(buffer, size, "%.*s", sexp->length, sexp->data);
+}
+
+s32
+sexp_serialize_tag(const struct sexp *sexp, char *buffer, size_t size) {
+    if (sexp == NULL || sexp->type != SEXP_TAG)
+        return -1;
+
+    const struct sexp* tag = sexp_tag_get_tag(sexp);
+    const struct sexp* atom = sexp_tag_get_atom(sexp);
+    
+    return snprintf(buffer, size, "[%.*s]%.*s",
+                    tag->length, tag->data,
+                    atom->length, atom->data);
+}
+    
+s32
+sexp_serialize_string(const struct sexp *sexp, char *buffer, size_t size) {
+    if (sexp == NULL || sexp->type != SEXP_STRING)
+        return -1;
+
+    return snprintf(buffer, size, "\"%s\"", (char*)sexp->data);
+}
+
+s32
+sexp_serialize_integer(const struct sexp *sexp, char *buffer, size_t size) {
+    if (sexp == NULL || sexp->type != SEXP_INTEGER)
+        return -1;
+
+    return snprintf(buffer, size, "%d", *(u32*)sexp->data);
+}
+
+s32
+sexp_serialize_list(const struct sexp *sexp, char *buffer, size_t size) {
+    if (buffer == NULL && size != 0)
+        return -1;
+    
+    if (sexp == NULL || sexp->type != SEXP_LIST)
+        return -1;
+    
+    if (sexp->length < sizeof(struct sexp))
+        return snprintf(buffer, size, "()");
+
+    size_t list_len = 1;
+    snprintf(buffer, size, "(");
+    
+    struct sexp* element = (struct sexp*)sexp->data;
+    while (element < (struct sexp*)(sexp->data + sexp->length)) {
+        size_t tmp = 0;
+
+        // case that nothing is written to buffer.
+        if (size == 0  && buffer == NULL)
+            tmp = sexp_serialize(element, NULL, 0);
+        else if (list_len < size) 
+            // don't write anything if there isn't enough space left in the buffer.
+            tmp = sexp_serialize(element, buffer + list_len, size-list_len);
+        else
+            return list_len;
+
+        if (tmp < 0)
+            return -1;
+
+        list_len += tmp;
+
+        element = (struct sexp*)(element->data + element->length);
+
+        if (element < (struct sexp*)(sexp->data + sexp->length)) {
+            if (size != 0  && buffer != NULL && list_len < size)
+                snprintf(buffer+list_len, size-list_len, " ");
+            
+            list_len++;
+        }
+    }
+
+    if  (list_len < size)
+        snprintf(buffer+list_len, size-list_len, ")");
+    
+    list_len += 1;
+        
+    return list_len;
+}
+
+s32
+sexp_serialize(const struct sexp* sexp, char* buffer, size_t size) {
+    // this function should return the number of bytes written to the buffer.
+    // If buffer is NULL, then no bytes are written.  If buffer is NULL and size
+    // is 0, no bytes are written, but the function will return the number of
+    // bytes that would have been written if the buffer existed.
+    if (sexp == NULL)
+        return -1;
+
+    switch (sexp->type) {
+    case SEXP_LIST:
+        return sexp_serialize_list(sexp, buffer, size);
+    case SEXP_SYMBOL:
+        return sexp_serialize_symbol(sexp, buffer, size);
+    case SEXP_INTEGER:
+        return sexp_serialize_integer(sexp, buffer, size);
+    case SEXP_TAG:
+        return sexp_serialize_tag(sexp, buffer, size);
+    case SEXP_STRING:
+        return sexp_serialize_string(sexp, buffer, size);
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// SEXP UTILITIES //////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
+
+const struct sexp*
+sexp_nth(const struct sexp* sexp, size_t n) {
+    if (sexp == NULL || sexp->type != SEXP_LIST || sexp->length <= 0)
+        return NULL;
+
+    struct sexp* element = (struct sexp*)sexp->data;
+    for (size_t i = 0; i < n; i++) {
+        element = (struct sexp*)(element->data + element->length);
+        if ((void*)element >= (void*)(sexp->data + sexp->length))
+            return NULL;
+    }
+
+    return element;
+}
+
+struct sexp*
+sexp_append(struct sexp* dst, const struct sexp* src) {
+    if (dst == NULL || src == NULL || dst->type != SEXP_LIST)
+        return NULL;
+
+    struct sexp* element = (struct sexp*)(dst->data + dst->length);
+    memcpy(element, src, sizeof(struct sexp) + src->length);
+
+    dst->length += sizeof(struct sexp) + src->length;
+
+    return element;
+}
+
+struct sexp*
+sexp_append_dat(struct sexp* dst, void* dat, size_t len, enum sexp_type type) {
+    if (dst == NULL || dst->type != SEXP_LIST)
+        return NULL;
+
+    if (type != SEXP_LIST && dat == NULL)
+        return NULL;
+
+    if (type == SEXP_INTEGER && len != sizeof(u32)) {
+        printf("ERROR: SEXP unsupported integer size: %zu", len);
+        return NULL;
+    }
+
+    struct sexp* element = (struct sexp*)(dst->data + dst->length);
+
+    if (type != SEXP_LIST)
+        memcpy(element->data, dat, len);
+
+    element->length = len;
+    element->type = type;
+
+    dst->length += sizeof(struct sexp) + len;
+
+    return element;
+}
+
+size_t
+sexp_length(const struct sexp* sexp) {
+    if (sexp == NULL || sexp->type != SEXP_LIST)
+        return 0;
+
+    
+    struct sexp* element = (struct sexp*)(sexp->data);
+
+    size_t n = 0;
+    while (element < (struct sexp*)(sexp->data + sexp->length)) {
+        n++;
+        element = (struct sexp*)(element->data + element->length);
+    }
+
+    return n;
 }

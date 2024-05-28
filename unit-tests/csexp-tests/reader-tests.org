@@ -174,3 +174,11 @@ fail to parse the input text.  It indicates that the reader should return NULL.
       
   - Input :: ("this"(is"a"test"of"("strings on"multiple)"levels")"!")
     - Assert :: ("this" (IS "a" TEST "of" ("strings on" MULTIPLE) "levels") "!")
+
+* Advanced Transport - Numbers
+  - Input :: (0 1 2 3 4 5)
+    - Assert :: (0 1 2 3 4 5)
+
+  - Input :: (tag0 0 tag1 1 tag2 2)
+    - Assert :: (TAG0 0 TAG1 1 TAG2 2)
+    

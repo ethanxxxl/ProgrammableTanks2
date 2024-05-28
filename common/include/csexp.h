@@ -79,9 +79,6 @@ struct sexp {
     u8 data[];
 };
 
-struct dyn_sexp* make_sexp(enum sexp_type type);
-void free_sexp(struct dyn_sexp* sexp);
-
 /**
  reads the sexp string and puts it into the sexp object.
 
@@ -95,14 +92,40 @@ void free_sexp(struct dyn_sexp* sexp);
 struct reader_result
 sexp_read(const char* sexp_str, struct sexp* sexp, bool dryrun);
 
-s32 sexp_fprint(const struct sexp*, FILE*);
-s32 sexp_print(const struct sexp*);
+s32
+sexp_fprint(const struct sexp*, FILE*);
 
-s32 sexp_append(struct sexp* dst, const struct sexp* src);
-s32 sexp_append_atom(struct sexp* dst, const char* atom);
+s32
+sexp_print(const struct sexp*);
 
-const struct sexp* sexp_nth(const struct sexp* list, size_t n);
+s32
+sexp_serialize(const struct sexp* sexp, char* buffer, size_t size);
 
-const struct sexp* sexp_find(const struct sexp* s, char* atom);
+
+
+struct sexp*
+sexp_append(struct sexp* dst, const struct sexp* src);
+
+struct sexp*
+sexp_append_dat(struct sexp* dst, void* dat, size_t len, enum sexp_type type);
+
+// returns how much memory it would take to represent the data if it were a
+// sexp.
+size_t
+sexp_size(enum sexp_type type, void* data);
+
+/* returns the number of elements in the sexp list. */
+size_t
+sexp_length(const struct sexp* sexp);
+
+const struct sexp*
+sexp_nth(const struct sexp* list, size_t n);
+
+const struct sexp*
+sexp_find(const struct sexp* s, char* atom);
+
+/* do you need malloc for this though?  If you know how much data you want to
+   encode in a sexp, then you determine how much space you need on to allocate
+   to store the sexp. */
 
 #endif
