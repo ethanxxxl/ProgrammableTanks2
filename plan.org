@@ -334,8 +334,6 @@
 
 
 * Networking Specification 2.0
-** Header Structure
-   
 ** Message Type Summary
    #+CAPTION: Summary of Messages
    | /Message Type/ | Description              |
@@ -359,7 +357,6 @@
    |----------------+--------------------------|
    |           0x00 | REQUEST_AUTHENTICATE     |
    
-
 ** LOBBY State Requests
    #+CAPTION: Messages sent by the client in the LOBBY state
    | /Message Type/ | Description             |
@@ -472,7 +469,7 @@
    - <decimal-digit>   :: "0" | ... | "9" ;
      
 
-** sructuring.
+** sructuring
 ** Data Types
    - strings
    - integers
@@ -529,6 +526,7 @@
    | '8' |          |
    | '9' |          |
    
+
 * Feature List
 ** TODO Multiple Scenarios
    - [ ] The Server can create new scenarios

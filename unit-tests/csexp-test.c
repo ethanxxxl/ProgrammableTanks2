@@ -295,11 +295,58 @@ void run_reader_test_suite() {
     free_vector(line_cache);
 }
 
+/***************************** DYNAMIC SEXP TESTS *****************************/
+const char *tst_comprehensive(void) {
+    struct sexp_dyn *sexp = sexp_dyn_read("(test 1 (2 3 \"four\"))");
+    struct sexp_dyn *current = sexp;
+
+    if (current->type != SEXP_CONS)
+        return "not cons type";
+
+    // FIXME this should also do a stringcmp of the value.
+    if (current->cons.car->type != SEXP_SYMBOL)
+        return "symbol TEST not found in (test 1 (2 3 \"four\"))";
+    
+    current = current->cons.cdr;
+    if (current->cons.car->type != SEXP_INTEGER)
+        return "integer 1 not found in (test 1 (2 3 \"four\"))";
+
+    current = current->cons.cdr;
+    if (current->cons.car->type != SEXP_CONS)
+        return "sub list not found in (test 1 (2 3 \"four\"))";
+
+    current = current->cons.car;
+    if (current->cons.car->type != SEXP_INTEGER)
+        return "integer 2 not found in (test 1 (2 3 \"four\"))";
+
+    current = current->cons.cdr;
+    if (current->cons.car->type != SEXP_INTEGER)
+        return "integer 3 not found in (test 1 (2 3 \"four\"))";
+
+    current = current->cons.cdr;
+    // FIXME this should also do a stringcmp of the value.
+    if (current->cons.car->type != SEXP_STRING)
+        return "string \"four\" not found in (test 1 (2 3 \"four\"))";
+    
+    return NULL;
+}
+
+
+
+struct test g_dyn_tests[] = {
+    {"test1", &tst_comprehensive}
+};
+    
+void sexp_dyn_test_suite() {
+    
+}
+
 int main(int argc, char **argv) {
     (void)argc;
     (void)argv;
 
     run_reader_test_suite();
+    run_test_suite(g_dyn_tests, 1, "sexp_dyn tests");
 
     return 0;
 }

@@ -1,5 +1,5 @@
-#include "message.h"
 #include "scenario.h"
+#include "message.h"
 #include "vector.h"
 #include "nonstdint.h"
 #include "csexp.h"
@@ -452,7 +452,7 @@ void scenario_tick_ser(const struct message* msg, vector* dat) {
     u8 sexp_buffer[buffer_len];
     struct sexp* sexp = (struct sexp*)sexp_buffer;
         
-    sexp->type = SEXP_LIST;
+    sexp->type = SEXP_CONS;
     sexp->length = 0;
 
     // 3. Copy the data from the message to the S Expression
@@ -462,7 +462,7 @@ void scenario_tick_ser(const struct message* msg, vector* dat) {
         sexp_append_dat(sexp, vec_dat(p->username), vec_len(p->username),
                         SEXP_STRING);
 
-        struct sexp* player_dat = sexp_append_dat(sexp, NULL, 0, SEXP_LIST);
+        struct sexp* player_dat = sexp_append_dat(sexp, NULL, 0, SEXP_CONS);
         for (size_t t = 0; t < vec_len(p->tank_positions); t++) {
             struct coord* pos = vec_ref(p->tank_positions, t);
 
@@ -523,7 +523,15 @@ void scenario_tick_des(struct message* msg, const vector* sexp_data) {
     }
 }
 
+s32 sexp_message_send(int fd, const struct sexp *sexp) {
+    FILE *connection = fdopen(fd, "w");
+    if (connection == NULL) {
+        printf("ERROR: failed to create stream from file descriptor!\n");
+        return -1;
+    }
 
+    return sexp_fprint(sexp, connection);
+}
 
 static const char *message_type_labels[] = {
     [MSG_REQUEST_AUTHENTICATE] = "MSG_REQUEST_AUTHENTICATE",

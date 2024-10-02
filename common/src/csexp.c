@@ -220,7 +220,7 @@ sexp_read_list(const char** caller_cursor, struct sexp* sexp, bool dryrun) {
         if (*cursor == ')') {
             if (!dryrun && sexp != NULL) {
                 sexp->length = list_length;
-                sexp->type = SEXP_LIST;
+                sexp->type = SEXP_CONS;
             }
 
             cursor++;
@@ -412,7 +412,7 @@ sexp_fprinter(const struct sexp*, FILE*);
 
 s32
 sexp_list_fprint(const struct sexp* sexp, FILE* f) {
-    if (sexp == NULL || sexp->type != SEXP_LIST)
+    if (sexp == NULL || sexp->type != SEXP_CONS)
         return -1;
     if (sexp->length == 0) {
         fprintf(f, "()");
@@ -457,7 +457,7 @@ sexp_fprinter(const struct sexp* sexp, FILE* f) {
     case SEXP_TAG: 
         ret = sexp_tagged_atom_fprint(sexp, f);
         break;
-    case SEXP_LIST:
+    case SEXP_CONS:
         ret = sexp_list_fprint(sexp, f);
         break;
     }
@@ -521,7 +521,7 @@ sexp_serialize_list(const struct sexp *sexp, char *buffer, size_t size) {
     if (buffer == NULL && size != 0)
         return -1;
     
-    if (sexp == NULL || sexp->type != SEXP_LIST)
+    if (sexp == NULL || sexp->type != SEXP_CONS)
         return -1;
     
     if (sexp->length < sizeof(struct sexp))
@@ -576,7 +576,7 @@ sexp_serialize(const struct sexp* sexp, char* buffer, size_t size) {
         return -1;
 
     switch (sexp->type) {
-    case SEXP_LIST:
+    case SEXP_CONS:
         return sexp_serialize_list(sexp, buffer, size);
     case SEXP_SYMBOL:
         return sexp_serialize_symbol(sexp, buffer, size);
@@ -595,7 +595,7 @@ sexp_serialize(const struct sexp* sexp, char* buffer, size_t size) {
 
 const struct sexp*
 sexp_nth(const struct sexp* sexp, size_t n) {
-    if (sexp == NULL || sexp->type != SEXP_LIST || sexp->length <= 0)
+    if (sexp == NULL || sexp->type != SEXP_CONS || sexp->length <= 0)
         return NULL;
 
     struct sexp* element = (struct sexp*)sexp->data;
@@ -610,7 +610,7 @@ sexp_nth(const struct sexp* sexp, size_t n) {
 
 struct sexp*
 sexp_append(struct sexp* dst, const struct sexp* src) {
-    if (dst == NULL || src == NULL || dst->type != SEXP_LIST)
+    if (dst == NULL || src == NULL || dst->type != SEXP_CONS)
         return NULL;
 
     struct sexp* element = (struct sexp*)(dst->data + dst->length);
@@ -623,10 +623,10 @@ sexp_append(struct sexp* dst, const struct sexp* src) {
 
 struct sexp*
 sexp_append_dat(struct sexp* dst, void* dat, size_t len, enum sexp_type type) {
-    if (dst == NULL || dst->type != SEXP_LIST)
+    if (dst == NULL || dst->type != SEXP_CONS)
         return NULL;
 
-    if (type != SEXP_LIST && dat == NULL)
+    if (type != SEXP_CONS && dat == NULL)
         return NULL;
 
     if (type == SEXP_INTEGER && len != sizeof(u32)) {
@@ -636,7 +636,7 @@ sexp_append_dat(struct sexp* dst, void* dat, size_t len, enum sexp_type type) {
 
     struct sexp* element = (struct sexp*)(dst->data + dst->length);
 
-    if (type != SEXP_LIST)
+    if (type != SEXP_CONS)
         memcpy(element->data, dat, len);
 
     element->length = len;
@@ -649,7 +649,7 @@ sexp_append_dat(struct sexp* dst, void* dat, size_t len, enum sexp_type type) {
 
 size_t
 sexp_length(const struct sexp* sexp) {
-    if (sexp == NULL || sexp->type != SEXP_LIST)
+    if (sexp == NULL || sexp->type != SEXP_CONS)
         return 0;
 
     
@@ -662,4 +662,127 @@ sexp_length(const struct sexp* sexp) {
     }
 
     return n;
+}
+
+
+/*************************** Malloc Implementation ****************************/
+
+struct sexp_dyn *sexp_to_dyn(const struct sexp *sexp) {
+    switch (sexp->type) {
+    case SEXP_CONS: {
+        struct sexp_dyn *parent_cons = make_cons(NULL, NULL);
+        struct cons *cons = &parent_cons->cons;
+
+        // fill in list
+        for (u32 n = 0; n < sexp_length(sexp); n++) {
+            cons->car = sexp_to_dyn(sexp_nth(sexp, n));
+            cons->cdr = make_cons(NULL, NULL);
+
+            // go to next element in the list.
+            cons = &cons->cdr->cons;
+        }
+
+        // terminate list with NIL
+        struct sexp_dyn *nil = make_cons(NULL, NULL);
+        nil->cons.car = nil;
+        nil->cons.cdr = nil;
+        
+        cons->cdr = nil;
+
+        return parent_cons;
+    }
+    case SEXP_INTEGER:
+        return make_integer(*(u32*)sexp->data);
+    case SEXP_STRING: 
+        return make_string((char *)sexp->data);
+    case SEXP_SYMBOL:
+        return make_symbol((char *)sexp->data);
+    case SEXP_TAG:
+        return make_tag();
+    }
+}
+
+
+/* TODO add proper error handling */
+struct sexp_dyn *sexp_dyn_read(char *str) {
+    // READ IN THE SEXP
+    struct reader_result result = sexp_read(str, NULL, true);
+    if (result.status != RESULT_OK) {
+        printf("ERROR: received following sexp_error: %s",
+               G_READER_RESULT_TYPE_STR[result.status]);
+        return NULL;
+    }
+
+    u8 sexp_buffer[result.length];
+    struct sexp *sexp = (struct sexp *)sexp_buffer;
+    sexp_read(str, sexp, false);
+
+    // COPY OVER AND MAKE DYNAMIC
+    return sexp_to_dyn(sexp);
+}
+
+struct sexp_dyn *make_cons(struct sexp_dyn *car, struct sexp_dyn *cdr) {
+    struct sexp_dyn *sexp = malloc(sizeof(struct sexp_dyn));
+    if (sexp == NULL) {
+        return NULL;
+    }
+    
+    sexp->type = SEXP_CONS;
+    sexp->cons.car = car;
+    sexp->cons.cdr = cdr;
+    return sexp;
+}
+
+struct sexp_dyn *make_integer(s32 num) {
+    struct sexp_dyn *sexp = malloc(sizeof(struct sexp_dyn));
+    if (sexp == NULL) {
+        return NULL;
+    }
+
+    sexp->type = SEXP_INTEGER;
+    sexp->integer = num;
+    return sexp;
+}
+
+struct sexp_dyn *make_symbol(char *symbol) {
+    struct sexp_dyn *sym = make_string(symbol);
+    sym->type = SEXP_SYMBOL;
+    return sym;
+}
+
+struct sexp_dyn *make_string(char *str) {
+    size_t length = strlen(str);
+    struct sexp_dyn *sexp = malloc(sizeof(struct sexp_dyn) + length);
+    if (sexp == NULL) {
+        return NULL;
+    }
+
+    sexp->type = SEXP_STRING;
+    memcpy(sexp->text, str, length);
+    sexp->text_len = length;
+
+    return sexp;
+}
+
+// TODO implement this
+struct sexp_dyn *make_tag() {
+    return NULL;
+}
+
+void free_sexp_dyn(struct sexp_dyn *sexp) {
+    if (sexp->type == SEXP_CONS) {
+        struct cons cons = sexp->cons;
+
+        free(sexp);
+
+        if (cons.car != sexp)
+            free_sexp_dyn(cons.car);
+
+        if (cons.cdr != sexp)
+            free_sexp_dyn(cons.cdr);
+        return;
+    }
+
+    free(sexp);
+    return;
 }

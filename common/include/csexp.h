@@ -7,6 +7,11 @@
 #include <stdio.h>
 #include <stddef.h>
 
+/**
+ * This library implements algorithms that read/write/manipulate S-Expressions.  Currently, The library includes functions that do not use malloc.
+ */
+
+
 #define FOR_EACH_RESULT_TYPE(RESULT) RESULT(RESULT_OK)  \
          RESULT(RESULT_ERR)                             \
          RESULT(RESULT_BAD_NETSTRING_LENGTH)            \
@@ -47,11 +52,11 @@ struct reader_result {
 };
 
 enum sexp_type {
-    SEXP_LIST,
-    SEXP_TAG,
+    SEXP_CONS,
     SEXP_SYMBOL,
-    SEXP_INTEGER,
     SEXP_STRING,
+    SEXP_INTEGER,
+    SEXP_TAG,
 };
 
 /**
@@ -102,12 +107,12 @@ s32
 sexp_serialize(const struct sexp* sexp, char* buffer, size_t size);
 
 
-
 struct sexp*
 sexp_append(struct sexp* dst, const struct sexp* src);
 
 struct sexp*
 sexp_append_dat(struct sexp* dst, void* dat, size_t len, enum sexp_type type);
+
 
 // returns how much memory it would take to represent the data if it were a
 // sexp.
@@ -124,8 +129,48 @@ sexp_nth(const struct sexp* list, size_t n);
 const struct sexp*
 sexp_find(const struct sexp* s, char* atom);
 
-/* do you need malloc for this though?  If you know how much data you want to
-   encode in a sexp, then you determine how much space you need on to allocate
-   to store the sexp. */
+/*************************** Malloc Implementation ****************************/
+
+struct sexp_dyn;
+struct cons {
+    struct sexp_dyn *car;
+    struct sexp_dyn *cdr;
+};
+
+/**
+ * @param type denotes whether what s-expression type is represented by the
+ * union.
+ * 
+ * @param cons
+ * 
+ * @param integer
+ *
+ * @param text_len used for ATOM_STRING and ATOM_SYMBOL types.  It denotes how
+ * many elements are stored in the text field at the end of the structure.
+ *
+ * @param text stores string data for ATOM_STRING and ATOM_SYMBOL
+ */
+struct sexp_dyn {
+    enum sexp_type type;
+    
+    union {
+        struct cons cons;
+        s32 integer;
+        size_t text_len;
+    };
+
+    char text[];
+};
+
+struct sexp_dyn *sexp_dyn_read(char *str);
+struct sexp_dyn *sexp_to_dyn(const struct sexp *sexp);
+
+struct sexp_dyn *make_cons(struct sexp_dyn *car, struct sexp_dyn *cdr);
+struct sexp_dyn *make_integer(s32 num);
+struct sexp_dyn *make_symbol(char *symbol);
+struct sexp_dyn *make_string(char *text);
+
+// TODO implement this!
+struct sexp_dyn *make_tag();
 
 #endif
