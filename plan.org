@@ -115,417 +115,221 @@
 
      The server will resolve healing first, followed by movement, then firing.
 
-* Program Structure
-** DONE File Structure
-   <2024-01-06 Sat>
-
-   as the program has grown more complex, I found the need to reorganize the file
-   structure, especially considering the abysmal state of ~client.c~. Below I
-   consider two options for how to structure the filesystem.  I ended up going
-   with option 2.
-*** Option 1
-   keep all sources together.  keep all includes together.
-   
-   - include/
-     + client-headers/
-     + server-headers/
-     + common-header-1
-     + common-header-2
-     + ...
-   - src/
-     + client-src/
-     + server-src/
-     + common-src-1
-     + common-src-2
-
-*** Option 2
-    separate the binaries, but keep the translation units common to both in
-    a separate include.
-   
-    - include/
-      + common-header-1
-      + common-header-2
-    - src/
-      + common-src-1
-      + common-src-2
-       
-    - client/
-      + include/
-      + src/
-    - server/
-      + include/
-      + src/
-
-    really what you are doing here is just creating multiple binaries and a
-    couple of libraries.  I like option 2 better.
-    
-** Connection Manager
-   The initial layer is where incoming connections and data packets are received
-   and deserialized.  Once the deserialization and post-processing are done, the
-   resulting data is sent to the client manager layer.
-
-** Player Client Manager
-   After the packet has been reconstructed and is passed to this layer, the
-   player managers will track the state of a player (what scenario are they in,
-   player data, etc.) and handle the messages that the player is sending to the
-   server.
-
-** Scenario Manager
-   If the player is in a scenario, then scenario messages will be sent to the
-   applicable scenario layer to be validated and applied.  It is in the scenario
-   where tank positions will be updated or scheduled.
-    
-
 * Networking Specification
-  Network connections between the client (player) and the server are stateful.
-  A client can be in one of three states: /Idle/, /Lobby/, or /Scenario/.  The
-  client can transition between these states by sending the appropriate message
-  to the server.
+  :PROPERTIES:
+  :header-args: :exports code
+  :END:
 
-  The format of all messages that are sent between client and server is listed
-  in subsequent sections.
-
-** Header Structure
-   All data encoded in a message will be in network order (big-endian). 
-
-   Message header data will be 8 bytes in length, and consist of two fields:
-   /Message Type/ and /Body Length/.
-
-   #+CAPTION: Message Header
-   | Byte |            0 |         1-4 |
-   | Desc | Message Type | Body Length |
-
-   While sets of messages sent by the client and server are mutually exclusive,
-   each /Message Type/ will be unique.  Message Types from ~0x00~ through ~0x7f~
-   originate from the client.  /Message Types/ from ~0x80~ through ~0xff~
-   originate from the server.
-   
-** Message Type Summary
-   #+CAPTION: Summary of Messages
-   | /Message Type/ | Description              |
-   |----------------+--------------------------|
-   |           0x00 | REQUEST_AUTHENTICATE     |
-   |           0x01 | REQUEST_LIST_SCENARIOS   |
-   |           0x02 | REQUEST_CREATE_SCENARIO  |
-   |           0x03 | REQUEST_JOIN_SCENARIO    |
-   |           0x04 | REQUEST_PLAYER_UPDATE    |
-   |           0x05 | REQUEST_RETURN_TO_LOBBY  |
-   |           0x06 | REQUEST_DEBUG            |
-   |----------------+--------------------------|
-   |           0x80 | RESPONSE_SCENARIO_TICK   |
-   |           0x81 | RESPONSE_SUCCESS         |
-   |           0x82 | RESPONSE_FAIL            |
-   |           0x83 | RESPONSE_INVALID_REQUEST |
-   
-** IDLE State Requests
-   #+CAPTION: Messages sent by the client in the IDLE state
-   | /Message Type/ | Description              |
-   |----------------+--------------------------|
-   |           0x00 | REQUEST_AUTHENTICATE     |
-   
-
-** LOBBY State Requests
-   #+CAPTION: Messages sent by the client in the LOBBY state
-   | /Message Type/ | Description             |
-   |----------------+-------------------------|
-   |           0x01 | REQUEST_LIST_SCENARIOS  |
-   |           0x02 | REQUEST_CREATE_SCENARIO |
-   |           0x03 | REQUEST_JOIN_SCENARIO   |
-   
-** SCENARIO State Requests
-   #+CAPTION: messages sent by the client in the SCENARIO state
-   | /Message Type/ | Description             |
-   |----------------+-------------------------|
-   |           0x04 | REQUEST_PLAYER_UPDATE   |
-   |           0x05 | REQUEST_RETURN_TO_LOBBY |
-   |           0x06 | REQUEST_DEBUG           |
-
-*** REQUEST_PLAYER_UPDATE
-    A PLAYER_UPDATE message should be sent by each client in a scenario at least
-    once per tick.  This message contains contain two sections (in order):
-    - TANK_INSTRUCTIONS
-    - TANK_TARGETS
-
-    Each section is a list containing data points that describe the tank at each
-    index.  The number of tanks in these sections does not need to be sent to
-    the server, as the server specifies how many tanks each user has in the
-    first place.
-      
-    The data points for each section are formatted accordingly:
-
-    #+CAPTION: PLAYER_UPDATE Section Formats
-    | Section           | Data Point Format        |
-    |-------------------+--------------------------|
-    | TANK_INSTRUCTIONS | [8-bit instruction data] |
-    | TANK_TARGET       | [32-bit x][32-bit y]     |
-
-
-    The instruction data encodes what the tank is supposed to do on that turn:
-    #+CAPTION: TANK_INSTRUCTIONS value map
-    | Value | Name   | Description                                        |
-    |     0 | MOVE   | The tank should move to TARGET                     |
-    |     1 | FIRE   | The tank should shoot at TARGET                    |
-    |     2 | REPAIR | TARGET is ignored.  Tank attempts to repair itself |
-    
-*** REQUEST_RETURN_TO_LOBBY
-    There is no body associated with this message.  Upon reception by the
-    server, the player associated with the connection will be sent to the lobby.
-
-*** REQUEST_DEBUG
-    
-** Server Responses
-   | /Message Type/ | Description              |
-   |----------------+--------------------------|
-   |           0x80 | RESPONSE_SCENARIO_TICK   |
-   |           0x81 | RESPONSE_SUCCESS         |
-   |           0x82 | RESPONSE_FAIL            |
-   |           0x83 | RESPONSE_INVALID_REQUEST |
-
-*** RESPONSE_SCENARIO_TICK
-    In a particular scenario, all connected clients will periodically receive
-    this message.  This ~SCENARIO_TICK~ message indicates that a turn in the
-    scenario has passed, and the next one is beginning.  The tick message will
-    also include a copy of the scenario state.
-    
-    /in future iterations of this specification, it may be necessary to limit
-    how much information is sent.  It may be unnecessary to send a complete
-    snapshot of everything in the scenario.  Only an update of what has changed
-    since the previous tick may be required./
-
-    the body of a ~SCENARIO_TICK~ will consist of three /sections/ in the
-    following order:
-    - USERNAMES
-    - NUM_TANKS
-    - TANK_POSITIONS
-
-    Each /section/ will consist of N /entries/.  N is determined by the number
-    of usernames in the USERNAMES section.
-
-    The USERNAMES section will consist of ASCII usernames separated by commas.
-    As previously mentioned, the number of usernames in this section determines
-    the number of entries in subsequent sections.  This section will be
-    terminated by a null character '\0'.
-
-    for example, a valid USERNAMES section for a scene with four users will look
-    like this:
-    
-    : "MindM4ge202,StratS0rc3rer5,R1ddleRebel13,Cr4ftyConjurer11"
-
-    The next section, NUM_TANKS, specifies how many tanks are associated with
-    each user.  There will be N entries in this section.  Each entry will be a
-    32-bit integer (big-endian).  Continuing with the previous example, a valid
-    NUM_TANKS section may be seen as follows:
-
-    | bytes     | 0-3 | 4-7 | 8-11 | 12-15 |
-    | NUM_TANKS |   5 |   5 |    8 |     8 |
-
-    The next section, TANK_POSITIONS, consists of N entries, where each entry is
-    a list of /data points/ related to the tank at that index.  Simply put, each
-    /data point/ describes a tank that belongs to a user.
-
-    As previously described, the TANK_POSITIONS section contains N entries.
-    Each entry is a list of data points that describe the position of the tank
-    being indexed.  A tank position data point consists of an x and y value,
-    each 32 bits in size.  Thus each data point will be 64 bits in length
-    
-*** RESPONSE_SUCCESS
-*** RESPONSE_FAIL
-*** RESPONSE_INVALID_REQUEST
-
-
-* Networking Specification 2.0
-** Message Type Summary
-   #+CAPTION: Summary of Messages
-   | /Message Type/ | Description              |
-   |----------------+--------------------------|
-   |           0x00 | REQUEST_AUTHENTICATE     |
-   |           0x01 | REQUEST_LIST_SCENARIOS   |
-   |           0x02 | REQUEST_CREATE_SCENARIO  |
-   |           0x03 | REQUEST_JOIN_SCENARIO    |
-   |           0x04 | REQUEST_PLAYER_UPDATE    |
-   |           0x05 | REQUEST_RETURN_TO_LOBBY  |
-   |           0x06 | REQUEST_DEBUG            |
-   |----------------+--------------------------|
-   |           0x80 | RESPONSE_SCENARIO_TICK   |
-   |           0x81 | RESPONSE_SUCCESS         |
-   |           0x82 | RESPONSE_FAIL            |
-   |           0x83 | RESPONSE_INVALID_REQUEST |
-   
-** IDLE State Requests
-   #+CAPTION: Messages sent by the client in the IDLE state
-   | /Message Type/ | Description              |
-   |----------------+--------------------------|
-   |           0x00 | REQUEST_AUTHENTICATE     |
-   
-** LOBBY State Requests
-   #+CAPTION: Messages sent by the client in the LOBBY state
-   | /Message Type/ | Description             |
-   |----------------+-------------------------|
-   |           0x01 | REQUEST_LIST_SCENARIOS  |
-   |           0x02 | REQUEST_CREATE_SCENARIO |
-   |           0x03 | REQUEST_JOIN_SCENARIO   |
-   
-** SCENARIO State Requests
-   #+CAPTION: messages sent by the client in the SCENARIO state
-   | /Message Type/ | Description             |
-   |----------------+-------------------------|
-   |           0x04 | REQUEST_PLAYER_UPDATE   |
-   |           0x05 | REQUEST_RETURN_TO_LOBBY |
-   |           0x06 | REQUEST_DEBUG           |
-
-*** REQUEST_PLAYER_UPDATE
-    #+begin_src lisp
-      (PLAYER-UPDATE (X Y X Y X Y X Y ...)
-                     (CMD1 CMD2 CMD3 ...))
-    #+end_src
-    
-*** REQUEST_RETURN_TO_LOBBY
-
-*** REQUEST_DEBUG
-    
-** Server Responses
-   | /Message Type/ | Description              |
-   |----------------+--------------------------|
-   |           0x80 | RESPONSE_SCENARIO_TICK   |
-   |           0x81 | RESPONSE_SUCCESS         |
-   |           0x82 | RESPONSE_FAIL            |
-   |           0x83 | RESPONSE_INVALID_REQUEST |
-
-*** RESPONSE_SCENARIO_TICK
-    #+begin_src lisp
-      (SCENARIO-TICK (USERNAME1 (X Y X Y X Y ...))
-                     (USERNAME2 (X Y X Y X Y ...))
-                     (USERNAME3 (X Y X Y X Y ...))
-                     ...)
-    #+end_src
-
-*** RESPONSE_SUCCESS
-*** RESPONSE_FAIL
-*** RESPONSE_INVALID_REQUEST
-
-* Serialization Specification: CSEXPs
-  The /csexp/, or canonical s-expression, is a superset of s-expressions that
-  allows for compact data storage and structuring.  This document loosely
-  follows an internet raft for S-expressions produced by Dr. Rivest.  The
-  latest revision of this draft is provided by [[https://www.ietf.org/archive/id/draft-rivest-sexp-08.html][IETF]].  This specification will
-  primarily focus on the *basic transport* representation described in the
-  draft.
-
-  The serialization format is summarized below.  Note that this specification
-  does not strictly follow the draft referenced above.  Liberties have been
-  taken for this specific use case.
+  #+OPTIONS: ^:{}
   
-  In addition to normal sexp rules, atoms may be formatted as a /netstring/.
-  Netstrings are encoded as ~size:value~, where /size/ is the length of the atom
-  in bytes, and the value is the byte sequence that composes the atom.
+  Messages will be sent using the S-Expression format described in the following
+  section.
 
-  Since it is possible to distinguish the atom without any whitespace
-  separators, for netstring atoms, no trailing whitespace is necessary, and will
-  be ignored.
+  All messages will follow the following general format:
 
-  as an example, the following csexps represent identical data:
-  : (5:hello17:this is some data9:there are1:55:sexps)
-  : (hello |this is some data| |there are| 5 sexps)
-
-  An atom may be tagged with a type by enclosing an atom in square brackets ~[]~
-  directly before it.  For example, ~([int]53 [str] "dog" [3:bar] 5:ethan)~.
-  Notice that since the brackets are reserved punctuation, trailing whitespace
-  is ignored.
-
+  #+begin_src lisp
+    (MESSAGE-TYPE BODY...)
+  #+end_src
   
+** Serialization Specification: CSEXPs
+   The /csexp/, or canonical s-expression, is a superset of s-expressions that
+   allows for compact data storage and structuring.  This document loosely
+   follows an internet raft for S-expressions produced by Dr. Rivest.  The
+   latest revision of this draft is provided by [[https://www.ietf.org/archive/id/draft-rivest-sexp-08.html][IETF]].  This specification will
+   primarily focus on the *basic transport* representation described in the
+   draft.
+
+   The serialization format is summarized below.  Note that this specification
+   does not strictly follow the draft referenced above.  Liberties have been
+   taken for this specific use case.
+  
+   In addition to normal sexp rules, atoms may be formatted as a /netstring/.
+   Netstrings are encoded as ~size:value~, where /size/ is the length of the atom
+   in bytes, and the value is the byte sequence that composes the atom.
+
+   Since it is possible to distinguish the atom without any whitespace
+   separators, for netstring atoms, no trailing whitespace is necessary, and will
+   be ignored.
+
+   as an example, the following csexps represent identical data:
+   : (5:hello17:this is some data9:there are1:55:sexps)
+   : (hello |this is some data| |there are| 5 sexps)
+
+   An atom may be tagged with a type by enclosing an atom in square brackets ~[]~
+   directly before it.  For example, ~([int]53 [str] "dog" [3:bar] 5:ethan)~.
+   Notice that since the brackets are reserved punctuation, trailing whitespace
+   is ignored.
  
-**  Character Sets
-   - Reserved Punctuation
-     + ( ) :: list notation
-     + [ ] :: type annotation
-     + |   :: atom character set extension
-     + ""  :: string
+*** Character Sets
+    - Reserved Punctuation
+      + ( ) :: list notation
+      + [ ] :: type annotation
+      + |   :: atom character set extension
+      + ""  :: string
 
-   - Special use Characters
-     + : :: netstring syntax
-     + # :: denotes special representation (hex)
+    - Special use Characters
+      + : :: netstring syntax
+      + # :: denotes special representation (hex)
 
-** BNF for syntax
-   note: copied from the first draft edition
+*** BNF for syntax
+    note: copied from the first draft edition
    
-   We use the following notation:
-   - <x>* :: means 0 or more occurrences of <x>
-   - <x>+ :: means 1 or more occurrences of <x>  
-   - <x>? :: means 0 or 1 occurrences of <x>
-   parentheses	are used for grouping, as in (<x> | <y>)*
+    We use the following notation:
+    - <x>* :: means 0 or more occurrences of <x>
+    - <x>+ :: means 1 or more occurrences of <x>  
+    - <x>? :: means 0 or 1 occurrences of <x>
+    parentheses	are used for grouping, as in (<x> | <y>)*
 
-   For canonical and basic transport:
+    For canonical and basic transport:
 
-   - <sexpr>           :: <string> | <list>
-   - <string>          :: <display>? <simple-string> ;
-   - <simple-string>   :: <raw> ;
-   - <display>         :: "[" <simple-string> "]" ;
-   - <raw>             :: <decimal> ":" <bytes> ;
-   - <decimal>         :: <decimal-digit>+ ;
-                          + Decimal numbers should have no unnecessary leading
-                            zeros
-   - <bytes>           :: any string of bytes, of the indicated length
-   - <list>            :: "(" <sexp>* ")" ;
-   - <decimal-digit>   :: "0" | ... | "9" ;
+    - <sexpr>           :: <string> | <list>
+    - <string>          :: <display>? <simple-string> ;
+    - <simple-string>   :: <raw> ;
+    - <display>         :: "[" <simple-string> "]" ;
+    - <raw>             :: <decimal> ":" <bytes> ;
+    - <decimal>         :: <decimal-digit>+ ;
+                           + Decimal numbers should have no unnecessary leading
+                             zeros
+    - <bytes>           :: any string of bytes, of the indicated length
+    - <list>            :: "(" <sexp>* ")" ;
+    - <decimal-digit>   :: "0" | ... | "9" ;
      
 
-** sructuring
-** Data Types
-   - strings
-   - integers
-   - lists
+*** sructuring
+*** Data Types
+    - strings
+    - integers
+    - lists
 
-   you could implement this serialization format as a subset of s-expressions.
+    you could implement this serialization format as a subset of s-expressions.
 
-   these have the benefit of not needing to transmit their length.
-   Advantages:
-   - human readable
-   - easy to implement
+    these have the benefit of not needing to transmit their length.
+    Advantages:
+    - human readable
+    - easy to implement
 
-   Cons:
-   - may use significantly more space than necessary, especially when
-     transmitting integers
-   - may be slow to encode/decode
+    Cons:
+    - may use significantly more space than necessary, especially when
+      transmitting integers
+    - may be slow to encode/decode
 
 
-   you might also want to look at *csexps*.  these have every atom prefixed by
-   their length and a colon
+    you might also want to look at *csexps*.  these have every atom prefixed by
+    their length and a colon
 
-   the following csexp...
+    the following csexp...
   
 
-   for plain text data, there isn't much of an advantage over the regular sexps.
-   But csexps can encode binary data as well.  after doing some research, it
-   seems that these things were never fully standardized.  I am taking this to
-   mean that I can work with them pretty much however I want. 
-** netstrings extension
-   if colon is made a special character, IE, its use is reserved within an atom,
-   then we can extend the netstrings capabilities.
+    for plain text data, there isn't much of an advantage over the regular sexps.
+    But csexps can encode binary data as well.  after doing some research, it
+    seems that these things were never fully standardized.  I am taking this to
+    mean that I can work with them pretty much however I want. 
+*** netstrings extension
+    if colon is made a special character, IE, its use is reserved within an atom,
+    then we can extend the netstrings capabilities.
 
-   alternatively, we could use a non-printable character instead.  ex, if 0x02
-   is in a place where a colon would normally be in a netstring, then the
-   preceding characters have a predetermined meaning.
+    alternatively, we could use a non-printable character instead.  ex, if 0x02
+    is in a place where a colon would normally be in a netstring, then the
+    preceding characters have a predetermined meaning.
    
    
 
-   - 0x30 - 0x39 :: ASCII Digits 0-9
-   - 0x5b :: Type Start '['
-   - 0x5d :: Type Stop ']'
-   - 0x28 :: '('
-   - 0x29 :: ')'
+    - 0x30 - 0x39 :: ASCII Digits 0-9
+    - 0x5b :: Type Start '['
+    - 0x5d :: Type Stop ']'
+    - 0x28 :: '('
+    - 0x29 :: ')'
      
    
-   | '0' | 00110000 |
-   | '1' | 00110001 |
-   | '2' |          |
-   | '3' |          |
-   | '4' |          |
-   | '5' |          |
-   | '6' |          |
-   | '7' |          |
-   | '8' |          |
-   | '9' |          |
+    | '0' | 00110000 |
+    | '1' | 00110001 |
+    | '2' |          |
+    | '3' |          |
+    | '4' |          |
+    | '5' |          |
+    | '6' |          |
+    | '7' |          |
+    | '8' |          |
+    | '9' |          |
    
+
+** Message Type Summary
+   #+CAPTION: Summary of Messages
+   | /Message Type/ | Description              |
+   |----------------+--------------------------|
+   |           0x00 | REQUEST_AUTHENTICATE     |
+   |           0x01 | REQUEST_LIST_SCENARIOS   |
+   |           0x02 | REQUEST_CREATE_SCENARIO  |
+   |           0x03 | REQUEST_JOIN_SCENARIO    |
+   |           0x04 | REQUEST_PLAYER_UPDATE    |
+   |           0x05 | REQUEST_RETURN_TO_LOBBY  |
+   |           0x06 | REQUEST_DEBUG            |
+   |----------------+--------------------------|
+   |           0x80 | RESPONSE_SCENARIO_TICK   |
+   |           0x81 | RESPONSE_SUCCESS         |
+   |           0x82 | RESPONSE_FAIL            |
+   |           0x83 | RESPONSE_INVALID_REQUEST |
+   
+** IDLE State Requests
+   #+CAPTION: Messages sent by the client in the IDLE state
+   | /Message Type/ | Description              |
+   |----------------+--------------------------|
+   |           0x00 | REQUEST_AUTHENTICATE     |
+
+   #+CAPTION: Message Format
+   #+begin_src lisp
+     (AUTHENTICATE USERNAME PASSWORD)
+   #+end_src
+   
+** LOBBY State Requests
+   #+CAPTION: Messages sent by the client in the LOBBY state
+   | /Message Type/ | Description             |
+   |----------------+-------------------------|
+   |           0x01 | REQUEST_LIST_SCENARIOS  |
+   |           0x02 | REQUEST_CREATE_SCENARIO |
+   |           0x03 | REQUEST_JOIN_SCENARIO   |
+   
+   #+CAPTION: Message Formats
+   #+begin_src lisp
+     (LIST-SCENARIOS USERNAME PASSWORD)
+     (CREATE-SCENARIO todo)
+     (JOIN-SCENARIO NAME)
+   #+end_src
+   
+** SCENARIO State Requests
+   #+CAPTION: messages sent by the client in the SCENARIO state
+   | /Message Type/ | Description             |
+   |----------------+-------------------------|
+   |           0x04 | REQUEST_PLAYER_UPDATE   |
+   |           0x05 | REQUEST_RETURN_TO_LOBBY |
+   |           0x06 | REQUEST_DEBUG           |
+
+   #+CAPTION: Message Formats
+   #+begin_src lisp
+     (PLAYER-UPDATE (X Y X Y X Y X Y ...)
+                     (CMD1 CMD2 CMD3 ...))
+     (RETURN-TO-LOBBY)
+     (DEBUG MESSAGE-STRING)
+   #+end_src
+    
+** Server Responses
+   | /Message Type/ | Description              |
+   |----------------+--------------------------|
+   |           0x80 | RESPONSE_SCENARIO_TICK   |
+   |           0x81 | RESPONSE_SUCCESS         |
+   |           0x82 | RESPONSE_FAIL            |
+   |           0x83 | RESPONSE_INVALID_REQUEST |
+
+   #+CAPTION: Message Formats
+   #+begin_src lisp
+     (SCENARIO-TICK (USERNAME1 (X Y X Y X Y ...))
+                    (USERNAME2 (X Y X Y X Y ...))
+                    (USERNAME3 (X Y X Y X Y ...))
+                    ...)
+     (SUCCESS)
+     (FAIL)
+     (INVALID-REQUEST)
+   #+end_src
 
 * Feature List
 ** TODO Multiple Scenarios

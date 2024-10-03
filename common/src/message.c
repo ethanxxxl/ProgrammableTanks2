@@ -1,3 +1,4 @@
+#include "command-line.h"
 #include "scenario.h"
 #include "message.h"
 #include "vector.h"
@@ -25,577 +26,252 @@ void print_hex(const void *data, size_t len) {
     printf("\n");
 }
 
-const struct message_fns G_TEXT_FNS = {
-    &text_ser,
-    &text_des,
-    &text_init,
-    &text_free,
-    NULL
-};
-const struct message_fns G_USER_CREDENTIALS_FNS = {
-    &user_credentials_ser,
-    &user_credentials_des,
-    &user_credentials_init,
-    &user_credentials_free,
-    NULL
-};
-const struct message_fns G_PLAYER_UPDATE_FNS = {
-    &player_update_ser,
-    &player_update_des,
-    &player_update_init,
-    &player_update_free,
-    NULL
-};
-const struct message_fns G_SCENARIO_TICK_FNS = {
-    &scenario_tick_ser,
-    &scenario_tick_des,
-    &scenario_tick_init,
-    &scenario_tick_free,
-    NULL
-};
+struct sexp_dyn *coords_vec_to_sexp(struct vector *coords) {
+    struct sexp_dyn *root = make_cons(NULL, NULL);
+    struct sexp_dyn *end = root;
 
-const struct message_fns* g_message_funcs[] =  {
-    // IDLE STATE REQUESTS
-    [MSG_REQUEST_AUTHENTICATE] = &G_USER_CREDENTIALS_FNS,
+    for (u32 i = 0; i < vec_len(coords); i++) {
+        struct coord *c = vec_ref(coords, i);
 
-    // LOBBY STATE REQUESTS
-    [MSG_REQUEST_LIST_SCENARIOS] = NULL,
-    [MSG_REQUEST_CREATE_SCENARIO] = NULL,
-    [MSG_REQUEST_JOIN_SCENARIO] = NULL,
+        append(end, make_integer(c->x));
+        end = cdr(end);
 
-    // SCENARIO STATE REQUESTS
-    [MSG_REQUEST_PLAYER_UPDATE] = &G_PLAYER_UPDATE_FNS,
-    [MSG_REQUEST_DEBUG] = &G_TEXT_FNS,
-    [MSG_REQUEST_RETURN_TO_LOBBY] = NULL,
-
-    // RESPONSES
-    [MSG_RESPONSE_SCENARIO_TICK] = &G_SCENARIO_TICK_FNS,
-
-    [MSG_RESPONSE_SUCCESS] = &G_TEXT_FNS,
-    [MSG_RESPONSE_FAIL] = &G_TEXT_FNS,
-    [MSG_RESPONSE_INVALID_REQUEST] = &G_TEXT_FNS,
-
-    [MSG_NULL] = NULL,
-};
-
-int message_send(int fd, const struct message msg) {
-    struct message_header header;
-    header.type = msg.type;
-    header.body_len = 0;
-
-    struct vector* msg_data = make_vector(sizeof(u8), 10);
-
-    vec_pushn(msg_data, &header.type, sizeof(u8));
-    vec_pushn(msg_data, &header.body_len, sizeof(u32));
-
-    if (g_message_funcs[msg.type] != NULL) {
-        g_message_funcs[msg.type]->message_ser(&msg, msg_data);
-        header.body_len = vec_len(msg_data) - MESSAGE_HEADER_SER_SIZE;
-        header.body_len = htonl(header.body_len);
+        append(end, make_integer(c->y));
+        end = cdr(end);
     }
 
-    // update the body length in the encoded header.
-    *(u32*)vec_byte_ref(msg_data, sizeof(u8)) = header.body_len;
-
-    write(fd, vec_dat(msg_data), vec_len(msg_data));
-
-    free_vector(msg_data);
-    return 0;
+    return root;
 }
 
-int message_recv(int fd, struct message* msg, struct vector* buf) {
-    /* DETERMINE AMOUNT OF DATA TO READ */
-    struct message_header header = {0};
+struct vector *coords_sexp_to_vector(struct sexp_dyn *coords) {
+    struct vector *vec = make_vector(sizeof(struct coord), 32);
 
-    size_t body_size = 0; // amount to read based off of length in header
-    if (vec_len(buf) >= MESSAGE_HEADER_SER_SIZE) {
-        header.type = *(u8*)vec_dat(buf);
-        header.body_len = *(u32*)vec_byte_ref(buf, sizeof(u8));
-        header.body_len = ntohl(header.body_len);
-
-        body_size = header.body_len;
-    }
-     
-    int read_amnt = vec_len(buf) - MESSAGE_HEADER_SER_SIZE + body_size;
-
-    if (read_amnt < 0)
-        read_amnt = MESSAGE_HEADER_SER_SIZE; // when vec_len(buf) = 0, then read_ammnt < 0.
-
-    /* READ AS MUCH DATA AS POSSIBLE */
-    uint8_t tmp[read_amnt];
-    int bytes_read = read(fd, tmp, read_amnt);
-
-    if (bytes_read <= 0)
-        return -1; // recv can potentially return -1.
-
-    vec_pushn(buf, tmp, bytes_read);
-
-    // update body_size to match header data, if able.
-    if (vec_len(buf) >= MESSAGE_HEADER_SER_SIZE) {
-        header.type = *(u8*)vec_dat(buf);
-        header.body_len = *(u32*)vec_byte_ref(buf, sizeof(u8));
-        header.body_len = ntohl(header.body_len);
+    while (!is_nil(cdr(coords))) {
+        struct coord coordinate;
+        if (car(coords)->type != SEXP_INTEGER) {
+            // TODO ERROR CONDITION
+        }
+        coordinate.x = car(coords)->integer;
+        coords = cdr(coords);
         
-        body_size = header.body_len;
+        if (car(coords)->type != SEXP_INTEGER) {
+            // TODO ERROR CONDITION
+        }
+        coordinate.y = car(coords)->integer;
+        coords = cdr(coords);
+
+        vec_push(vec, &coordinate);
     }
 
-    if (vec_len(buf) < MESSAGE_HEADER_SER_SIZE ||
-        vec_len(buf) < MESSAGE_HEADER_SER_SIZE + body_size) {
-        return -1;
-    }
-
-    /* CREATE MESSAGE, CLEAR BUFFER */
-    *msg = (struct message){0}; // clear out garbage from msg struct.
-    msg->type = header.type;
+    return vec;
+}
 
 
-    if (((msg->type < 0x80) && msg->type >= MSG_REQUEST_NULL) ||
-        (msg->type >= MSG_RESPONSE_NULL)) {
+void message_send(int fd, const struct sexp_dyn *msg) {
+    (void)fd;
+    (void)msg;
+
+    
         
-        // the message type is not recognized.  Throw out the message.
+    return;
+}
+
+struct sexp_dyn *message_recv(int fd, struct vector* buf) {
+    size_t space_available = vec_cap(buf) - vec_len(buf);
+    
+    if (space_available < 50) {
+        vec_reserve(buf, vec_len(buf) * 2);
+        space_available = vec_cap(buf) - vec_len(buf);
+    }
+
+    int bytes_read = read(fd, (char *)vec_end(buf) + 1, space_available);
+    vec_resize(buf, vec_len(buf) + bytes_read);
+
+    // increases with open paren, decreases with close paren
+    s32 paren_count = 0;
+    for (char *c = vec_dat(buf); c < (char *)vec_end(buf); c++) {
+        if (*c == '(')
+            paren_count++;
+        else if (*c == ')')
+            paren_count--;
+    }
+
+    if (paren_count < 0) {
+        // TODO this is an error state (extra close paren)
+    }
+
+    if (paren_count == 0 && vec_len(buf) > 0) {
+        // closed parenthesis, and a non-empty buffer. complete message.
+
+        // FIXME assumes no errors can happen.
+        struct sexp_dyn *sexp = sexp_dyn_read(vec_dat(buf));
         vec_resize(buf, 0);
-        printf("received an invalid message!\n");
-        return -1; // message is invalid        
-    }
 
-    // remove the header from the vector, so it only contains the body.
-    for (unsigned int i = 0; i < MESSAGE_HEADER_SER_SIZE; i++)
-        vec_rem(buf, 0);
-
-    if (g_message_funcs[msg->type] != NULL) {
-        g_message_funcs[msg->type]->message_init(msg);
-        g_message_funcs[msg->type]->message_des(msg, buf);
-    }
-
-    vec_resize(buf, 0);
-    return 0;
-}
-
-/// sends a SUCCESS, FAIL, or INVALID response. This function doesn't require a
-/// vector to be initialized.
-int message_send_conf(int fd, enum message_type type, const char *text) {
-    if (type != MSG_RESPONSE_SUCCESS && type != MSG_RESPONSE_FAIL &&
-        type != MSG_RESPONSE_INVALID_REQUEST)
-        return -1;
-
-    u8 header[MESSAGE_HEADER_SER_SIZE];
-    *(u8*)header = type;
-    *(u32*)(header+1) = htonl(strlen(text));
-    
-    int header_len = send(fd, header, sizeof(header), 0);
-    if (header_len < 0)
-        return -1;
-
-    // don't send body if there is no text.
-    if (text == NULL)
-        return header_len;
-
-    int body_len = send(fd, text, strlen(text), 0);
-    if (body_len < 0)
-        return -1;
-
-    return header_len + body_len;
-}
-
-
-/* TEXT_FNS
- * */
-void text_ser(const struct message* msg, struct vector* dat) {
-    vec_concat(dat, msg->text);
-}
-
-void text_des(struct message* msg, const struct vector* dat) {
-    vec_concat(msg->text, dat);
-    vec_push(msg->text, "\0"); // ensure null termination
-}
-void text_init(struct message* msg) {
-    msg->text = make_vector(sizeof(char), 10);
-}
-void text_free(struct message* msg) { free_vector(msg->text); }
-
-/* USER_CREDENTIALS_FNS
- * */
-void user_credentials_ser(const struct message* msg, struct vector* dat) {
-    vec_concat(dat, msg->user_credentials.username);
-}
-void user_credentials_des(struct message* msg, const struct vector* dat) {
-    vec_concat(msg->user_credentials.username, dat);
-    vec_push(msg->user_credentials.username, "\0");
-}
-void user_credentials_init(struct message* msg) {
-    msg->user_credentials.username = make_vector(sizeof(char), 10);
-}
-void user_credentials_free(struct message* msg) {
-    free_vector(msg->user_credentials.username);
-}
-
-/* PLAYER_UPDATE_FNS
- * message is encoded with the following pattern:
- * { tank_instructions[0..n], tank_positions[0..n], tank_targets[0..n]}
- * */
-void player_update_ser(const struct message *msg, struct vector *dat) {
-    // do a sanity check first
-    struct vector* instructions  = msg->player_update.tank_instructions;
-    struct vector* target_coords = msg->player_update.tank_target_coords;
-
-    if (vec_len(instructions) != vec_len(target_coords))
-        // TODO: this should return -1.
-        return;
-
-    // add each element to the data stream. 
-    for (size_t i = 0; i < vec_len(instructions); i++) {
-        // convert a tank command enum to a uint8_t, without losing any data due
-        // to endianness
-        uint8_t tank_command =
-            (uint8_t)(*(enum tank_command*)vec_ref(instructions, i));
-
-        vec_push(dat, &tank_command);
-    }
-
-    // convert each element in the data stream to network order
-    for (size_t i = 0; i < vec_len(target_coords); i++) {
-        struct coord* target = vec_ref(target_coords, i);
-        struct coord net_order_target = {
-            .x = htonl(target->x),
-            .y = htonl(target->y)
-        };
-
-        vec_pushn(dat, &net_order_target, sizeof(struct coord));
+        return sexp;
     }
     
-    return;
+    return NULL;
 }
-void player_update_des(struct message *msg, const struct vector *dat) {
-    // tank data is disjoint and total number of tanks isn't encoded directly in
-    // the data stream. the number of tanks is found by calculating the amount
-    // of space all the data for a single tank consumes, then dividing the byte
-    // stream length by that amount.
-    const int element_total_data =
-        sizeof(u8) + sizeof(struct coord); // tank commands are sent as a u8
 
-    const size_t num_tanks = vec_len(dat) / element_total_data;
+/** returns either the enum value or a string for the enum.
+*/
+#define USE_STRING_HEADER
+#ifdef USE_STRING_HEADER
+#define MAKE_HEADER(type)                                                      \
+    (make_string(#type))
+#else
+#define MAKE_HEADER(type)                                                      \
+    (make_integer(type))
 
-    struct player_update* msg_data = &msg->player_update;
+#endif
 
-    for (size_t cmd = 0; cmd < num_tanks; cmd++) {
-        enum tank_command tc = (enum tank_command)*(u8*)vec_ref(dat, cmd);
-        vec_push(msg_data->tank_instructions, &tc);
+
+/*************************** Text Message Functions ***************************/
+struct sexp_dyn *make_text_message(const char *message) {
+    return list((struct sexp_dyn*[]){
+            MAKE_HEADER(MSG_REQUEST_DEBUG),
+            make_string(message)}
+        );
+}
+
+const char *unwrap_text_message(const struct sexp_dyn *msg) {
+    if (nth(msg, 1)->type != SEXP_STRING)
+        return NULL;
+
+    return nth(msg, 1)->text;
+}
+
+
+/************************** Status Message Functions **************************/
+struct sexp_dyn *make_status_message(enum message_status status) {
+    return list((struct sexp_dyn*[]){
+                MAKE_HEADER(MSG_RESPONSE_STATUS),
+                make_integer(status)}
+        );
+}
+
+enum message_status unwrap_status_message(const struct sexp_dyn *msg) {
+    if (nth(msg, 1)->type != SEXP_INTEGER) {
+        // TODO what to do if this is wrong!?
+    }
+        
+    return nth(msg, 1)->integer;
+}
+
+/********************* User Credentials Message Functions *********************/
+struct sexp_dyn *
+make_user_credentials_message(const struct user_credentials *creds) {
+    return list((struct sexp_dyn*[]){
+            MAKE_HEADER(MSG_REQUEST_AUTHENTICATE),
+            make_string(vec_dat(creds->username)),
+            make_string(vec_dat(creds->password)),
+        });
+}
+
+struct user_credentials
+unwrap_user_credentials_message(const struct sexp_dyn *msg) {
+    struct user_credentials creds;
+
+    struct sexp_dyn *username = nth(msg, 1);
+    struct sexp_dyn *password = nth(msg, 2);
+
+    if (username->type != SEXP_STRING || password->type != SEXP_STRING) {
+        // TODO  what to do if this wrong!?
+    }
+    
+    creds.username = make_vector(sizeof(char), username->text_len);
+    vec_pushn(creds.username, username->text, username->text_len);
+    
+    creds.password = make_vector(sizeof(char), password->text_len);
+    vec_pushn(creds.password, password->text, password->text_len);
+
+    return creds;
+}
+
+/********************** Player Update Message Functions ***********************/
+
+struct sexp_dyn *
+make_player_update_message(const struct player_update *player_update) {
+
+    return list((struct sexp_dyn*[]){
+            MAKE_HEADER(MSG_REQUEST_PLAYER_UPDATE),
+            coords_vec_to_sexp(player_update->tank_target_coords),
+            coords_vec_to_sexp(player_update->tank_instructions),
+        });
+}
+
+struct player_update unwrap_player_update_message(const struct sexp_dyn *msg) {
+    struct player_update update;
+
+    struct sexp_dyn *targets = nth(msg, 1);
+    struct sexp_dyn *commands = nth(msg, 2);
+
+    update.tank_target_coords = coords_sexp_to_vector(targets);
+
+    update.tank_instructions = make_vector(sizeof(enum tank_command),
+                                           vec_len(update.tank_target_coords));
+
+    for (u32 c = 0;
+         (c < vec_len(update.tank_target_coords)) || is_nil(commands);
+         c++) {
+        vec_push(update.tank_instructions, &car(commands)->integer);
+        commands = cdr(commands);
     }
 
-    // copy data from network to a message object.  Converts from network order
-    // to host order.
-    for (size_t i = 0; i < num_tanks; i++) {
-        const size_t targets_offset = num_tanks * sizeof(uint8_t);
-        
-        struct coord* net_order_target = vec_ref(dat, targets_offset + i*sizeof(struct coord));
-        struct coord host_order_target = {
-            .x = ntohl(net_order_target->x),
-            .y = ntohl(net_order_target->y)
-        };
-
-        vec_push(msg_data->tank_target_coords, &host_order_target);
-    }
-        
-    return;
-}
-void player_update_init(struct message *msg) {
-    // allocate members of the struct
-    msg->player_update = (struct player_update) {
-        .tank_instructions =    make_vector(sizeof(enum tank_command), 30),
-        .tank_target_coords =   make_vector(sizeof(struct coord), 30)
-    };
-    return;    
-}
-void player_update_free(struct message *msg) {
-    struct player_update* player_update = &msg->player_update;
-    free_vector(player_update->tank_instructions);
-    free_vector(player_update->tank_target_coords);
-
-    memset(player_update, 0, sizeof(struct player_update));
-    return;
+    return update;
 }
 
-/* SCENARIO_TICK
+/********************** Scenario Tick Message Functions ***********************/
+/*
+  (SCENARIO-TICK (USERNAME1 (X Y X Y X Y ...))
+                 (USERNAME2 (X Y X Y X Y ...))
+                 (USERNAME3 (X Y X Y X Y ...))
+                 ...)
  */
-void _scenario_tick_ser(const struct message *msg, struct vector *dat) {
-    struct vector* players_data = msg->scenario_tick.players_public_data;
+ 
+struct sexp_dyn *make_scenario_tick_message(const struct scenario_tick *tick) {
+    struct sexp_dyn *msg_root = make_cons(NULL, NULL);
+    struct sexp_dyn *msg = msg_root;
 
-    // USERNAMES section
-    for (size_t i = 0; i < vec_len(players_data); i++) {
-        struct player_public_data* player = vec_ref(players_data, i);
-        vec_pushn(dat, vec_dat(player->username), vec_len(player->username));
-        vec_push(dat, ",");
+
+    for (u32 p = 0; p < vec_len(tick->players_public_data); p++ ) {
+        struct player_public_data *data = vec_ref(tick->players_public_data, p);
+
+        append(msg, list((struct sexp_dyn *[])
+                         { make_string(vec_dat(data->username)),
+                           coords_vec_to_sexp(data->tank_positions),
+                         }));
+
+        msg = cdr(msg);
     }
 
-    // change last ',' to a '\0'
-    vec_pop(dat, NULL);
-    vec_push(dat, "\0");
-
-    // NUM_TANKS section
-    for (size_t i = 0; i < vec_len(players_data); i++) {
-        struct player_public_data* player = vec_ref(players_data, i);
-        u32 num_tanks_host = vec_len(player->tank_positions);
-        u32 num_tanks_net = htonl(num_tanks_host);
-
-        vec_pushn(dat, &num_tanks_net, sizeof(u32));
-    }
-
-    // TANK_POSITIONS section
-    for (size_t i = 0; i < vec_len(players_data); i++) {
-        struct player_public_data* player = vec_ref(players_data, i);
-
-        for (size_t t = 0; t < vec_len(player->tank_positions); t++) {
-            struct coord* pos_host = vec_ref(player->tank_positions, t);
-            struct coord pos_net = {
-                .x = htonl(pos_host->x),
-                .y = htonl(pos_host->y)
-            };
-            
-            vec_pushn(dat, &pos_net, sizeof(struct coord));
-        }
-    }
-
-    return;
+    return msg_root;
 }
 
-void _scenario_tick_des(struct message *msg, const struct vector *dat) {
-    struct vector* players_data = msg->scenario_tick.players_public_data;
-    // USERNAMES section
-    size_t num_tanks_offset = 0;
-    for (const char* c = vec_ref(dat, 0); *c != '\0'; c++) {
-        const char* c_end = c;
-        while (*c_end != ',' && *c_end != '\0') c_end++;
+struct scenario_tick unwrap_scenario_tick_message(const struct sexp_dyn *msg) {
+    struct scenario_tick tick = {
+        .players_public_data = make_vector(sizeof(struct player_public_data), 10)
+    };
 
-        // initialize new player
-        struct player_public_data p = make_player_public_data();
+    s32 num_players = length(msg) - 1;
 
-        vec_pushn(p.username, c, c_end-c); // copy username
-        vec_push(players_data, &p);        // push player data onto vector
+    struct sexp_dyn *player = cdr(msg);
+
+    for (s32 i = 0; i < num_players; i++) {
+        struct player_public_data data;
+
+        struct sexp_dyn *username = nth(player, 0);
+        struct sexp_dyn *tank_coords = nth(player, 1);
+
+        data.username = make_vector(sizeof(char), username->text_len);
+        vec_pushn(data.username, username->text, username->text_len);
         
-        num_tanks_offset += c_end - c + 1; // add one to account for the ','
-        c = c_end;
+        data.tank_positions = coords_sexp_to_vector(tank_coords);
+
+        vec_push(tick.players_public_data, &data);
+
+        player = cdr(player);
     }
 
-    size_t num_players = vec_len(players_data);
-    size_t tank_positions_offset = num_tanks_offset + sizeof(u32)*num_players;
-    
-    // TANK POSITIONS section
-    for (size_t i = 0; i < num_players; i++) {
-        struct player_public_data* p = vec_ref(players_data, i);
-
-        // find the number of tanks from the NUM TANKS section
-        u32 player_num_tanks = *(u32*)vec_ref(dat, num_tanks_offset);
-        player_num_tanks = ntohl(player_num_tanks);
-
-        // convert endianness and copy positions into array
-        for (size_t t = 0; t < player_num_tanks; t++) {
-            struct coord* net_order_pos =
-                vec_ref(dat, tank_positions_offset + t*sizeof(struct coord));
-
-            struct coord host_order_pos = {
-                .x = ntohl(net_order_pos->x),
-                .y = ntohl(net_order_pos->y)
-            };
-
-            vec_push(p->tank_positions, &host_order_pos);
-        }
-
-        // make the position offset start at the next players tanks
-        tank_positions_offset += sizeof(struct coord) * player_num_tanks;
-    }
-}
-void scenario_tick_init(struct message *msg) {
-    msg->scenario_tick.players_public_data =
-        make_vector(sizeof(struct player_public_data), 5);
-
-    return;
-}
-void scenario_tick_free(struct message *msg) {
-    struct vector* players_data = msg->scenario_tick.players_public_data;
-
-    // free every object in the vector
-    for (size_t i = 0; i < vec_len(players_data); i++) {
-        free_player_public_data(vec_ref(players_data, i));
-    }
-
-    // free the vector storing players data.
-    free_vector(players_data);
-    return;
-}
-
-
-void scenario_tick_ser(const struct message* msg, vector* dat) {
-    if (msg->type != MSG_RESPONSE_SCENARIO_TICK)
-        return;
-
-    vector* public_data = msg->scenario_tick.players_public_data;
-
-    // 1. Determine How Large Your Vector Needs to Be
-    size_t buffer_len = sizeof(struct sexp);
-    for (size_t n = 0; n < vec_len(public_data); n++) {
-        struct player_public_data* p = vec_ref(public_data, n);
-
-        // length of the username symbol
-        buffer_len += sizeof(struct sexp) + vec_len(p->username);
-
-        // size of the sub list
-        buffer_len += sizeof(struct sexp);
-
-        // size of the sub list elements
-        buffer_len += vec_len(p->tank_positions)
-            * (sizeof(struct sexp) + sizeof(u32))
-            * 2;
-
-    }
-
-    // 2. Initialize the Vector/Sexp
-    u8 sexp_buffer[buffer_len];
-    struct sexp* sexp = (struct sexp*)sexp_buffer;
-        
-    sexp->type = SEXP_CONS;
-    sexp->length = 0;
-
-    // 3. Copy the data from the message to the S Expression
-    for (size_t n = 0; n < vec_len(public_data); n++) {
-        struct player_public_data* p = vec_ref(public_data, n);
-        
-        sexp_append_dat(sexp, vec_dat(p->username), vec_len(p->username),
-                        SEXP_STRING);
-
-        struct sexp* player_dat = sexp_append_dat(sexp, NULL, 0, SEXP_CONS);
-        for (size_t t = 0; t < vec_len(p->tank_positions); t++) {
-            struct coord* pos = vec_ref(p->tank_positions, t);
-
-            sexp_append_dat(player_dat, &pos->x, sizeof(u32), SEXP_INTEGER);
-            sexp_append_dat(player_dat, &pos->y, sizeof(u32), SEXP_INTEGER);
-        }
-
-        sexp->length += player_dat->length;
-    }    
-
-    // 4. reserve space for serialized data
-    size_t serialize_len = sexp_serialize(sexp, NULL, 0);
-
-    size_t initial_len = vec_len(dat);
-    vec_resize(dat, initial_len + serialize_len + 1);
-
-    sexp_serialize(sexp, vec_ref(dat, initial_len), serialize_len+1);
-
-    return;
-}
-
-void scenario_tick_des(struct message* msg, const vector* sexp_data) {
-    struct reader_result r = sexp_read(vec_dat((vector*)sexp_data), NULL, true);
-    if (r.status != RESULT_OK) {
-        printf("MALFORMED MESSAGE: %s\n%s\n",
-               G_READER_RESULT_TYPE_STR[r.status],
-               r.error_location);
-        return;
-    }
-
-    u8 sexp_buffer[r.length];
-    struct sexp* sexp = (struct sexp*)sexp_buffer;
-    
-    sexp_read(vec_dat((vector*)sexp_data), sexp, false);
-    
-    for (u32 i = 0; i < sexp_length(sexp); i++) {
-        const struct sexp* username = sexp_nth(sexp, i++);
-
-        struct player_public_data public_data;
-        public_data.username = make_vector(sizeof(char), username->length);
-        vec_pushn(public_data.username, username->data, username->length);
-
-        const struct sexp* tank_positions = sexp_nth(sexp, i);
-
-        public_data.tank_positions = make_vector(sizeof(struct coord),
-                                                 tank_positions->length/2);
-
-        for (u32 t = 0; t < sexp_length(tank_positions); t+=2) {
-            struct coord pos = {
-                .x  = *(u32*)sexp_nth(tank_positions, t)->data,
-                .y = *(u32*)sexp_nth(tank_positions, t+1)->data,             
-            };
-
-            vec_push(public_data.tank_positions, &pos);
-        }
-
-        vec_push(msg->scenario_tick.players_public_data, &public_data);
-    }
-}
-
-s32 sexp_message_send(int fd, const struct sexp *sexp) {
-    FILE *connection = fdopen(fd, "w");
-    if (connection == NULL) {
-        printf("ERROR: failed to create stream from file descriptor!\n");
-        return -1;
-    }
-
-    return sexp_fprint(sexp, connection);
-}
-
-static const char *message_type_labels[] = {
-    [MSG_REQUEST_AUTHENTICATE] = "MSG_REQUEST_AUTHENTICATE",
-    [MSG_REQUEST_LIST_SCENARIOS] = "MSG_REQUEST_LIST_SCENARIOS",
-    [MSG_REQUEST_CREATE_SCENARIO] = "MSG_REQUEST_CREATE_SCENARIO",
-    [MSG_REQUEST_JOIN_SCENARIO] = "MSG_REQUEST_JOIN_SCENARIO",
-    [MSG_REQUEST_PLAYER_UPDATE] = "MSG_REQUEST_PROPOSE_UPDATE",
-    [MSG_REQUEST_DEBUG] = "MSG_REQUEST_DEBUG",
-    [MSG_REQUEST_RETURN_TO_LOBBY] = "MSG_REQUEST_RETURN_TO_LOBBY",
-    [MSG_RESPONSE_SCENARIO_TICK] = "MSG_RESPONSE_SCENARIO_TICK",
-    [MSG_RESPONSE_SUCCESS] = "MSG_RESPONSE_SUCCESS",
-    [MSG_RESPONSE_FAIL] = "MSG_RESPONSE_FAIL",
-    [MSG_RESPONSE_INVALID_REQUEST] = "MSG_RESPONSE_INVALID_REQUEST",
-};
-
-void print_message(struct message msg) {
-    if (msg.type < sizeof(message_type_labels)) {
-        printf("message: %s\n", message_type_labels[msg.type]);
-    } else {
-        printf("message: %d (unknown)\n", msg.type);
-    }
-
-    switch (msg.type) {
-    case MSG_RESPONSE_SUCCESS:
-    case MSG_RESPONSE_FAIL:
-    case MSG_RESPONSE_INVALID_REQUEST:
-        if (vec_len(msg.text) > 0)
-            printf(" [txt] %s\n", (char *)vec_dat(msg.text));
-        break;
-
-    case MSG_REQUEST_AUTHENTICATE:
-        printf(" [username] %s\n", (char*)vec_dat(msg.user_credentials.username));
-        break;
-
-    case MSG_RESPONSE_SCENARIO_TICK:
-        
-        printf(" [users] [%zu]\n", vec_len(msg.scenario_tick.players_public_data));
-        for (size_t i = 0; i < vec_len(msg.scenario_tick.players_public_data); i++) {
-            struct player_public_data* player =
-                vec_ref(msg.scenario_tick.players_public_data, i);
-            
-            printf("   %s\n\n", (char*)vec_dat(player->username));
-        }
-
-        break;
-    default:
-        break;
-    }
-}
-
-int make_message(struct message* msg, enum message_type type) {
-    msg->type = type;
-    if (g_message_funcs[type] == NULL) {
-        return 0;
-    }
-
-    g_message_funcs[type]->message_init(msg);
-    return 0;
-}
-
-int free_message(struct message msg) {
-    if (g_message_funcs[msg.type] == NULL)
-        return 0;
-
-    g_message_funcs[msg.type]->message_free(&msg);
-    return 0;
+    return tick;
 }

@@ -9,8 +9,6 @@
 #include <unistd.h>
 
 
-
-
 // HACK these are externs referenced in scenario.c which are defined in the
 // server translation unit. In order for the tests to compile, they need to
 // provide a defnition for this global variable.
@@ -103,7 +101,8 @@ const char* tst_player_update_serde(void) {
     free_message(out_msg);
     
     return error_msg;
-}
+ }
+ 
 const char* tst_scenario_tick_serde(void) {
     char* error_msg = NULL;
     
@@ -137,7 +136,6 @@ const char* tst_scenario_tick_serde(void) {
         vec_push(player_data, &pd);
     }
 
-
     // get public data
     vector* public_data = make_vector(sizeof(struct player_public_data), 10);
 
@@ -148,10 +146,11 @@ const char* tst_scenario_tick_serde(void) {
         vec_push(public_data, &pub_dat);
     }
 
+    struct scenario_tick tick = {
+        .players_public_data = public_data,
+    };
 
-    struct message out_msg;
-    make_message(&out_msg, MSG_RESPONSE_SCENARIO_TICK);
-    out_msg.scenario_tick.players_public_data = public_data;
+    struct sexp_dyn *out_msg = make_scenario_tick_message(&tick);
 
     int fd[2];
     if (pipe(fd) == -1) {

@@ -6,11 +6,31 @@
 
 #include <stdio.h>
 #include <stddef.h>
+#include <stdbool.h>
 
 /**
- * This library implements algorithms that read/write/manipulate S-Expressions.  Currently, The library includes functions that do not use malloc.
+ * This library implements algorithms that read/write/manipulate S-Expressions.
+ * Currently, The library includes functions that do not use malloc.
  */
 
+struct sexp_static;
+struct sexp_dyn;
+
+enum sexp_implementation_type {
+    SEXP_STATIC,
+    SEXP_DYNAMIC,
+};
+
+struct sexp {
+    enum sexp_implementation_type type;
+
+    union {
+        struct sexp_static *s;
+        struct sexp_dyn *d;
+    };
+};
+
+/*************************** Static Implementation ****************************/
 
 #define FOR_EACH_RESULT_TYPE(RESULT) RESULT(RESULT_OK)  \
          RESULT(RESULT_ERR)                             \
@@ -78,7 +98,7 @@ enum sexp_type {
  * @param length The length of data.
  * @param data Actual data encoded by the sexp_item.
  */
-struct sexp {
+struct sexp_static {
     enum sexp_type type;
     u32 length;
     u8 data[];
@@ -95,23 +115,23 @@ struct sexp {
  structure that this function returns.
 */
 struct reader_result
-sexp_read(const char* sexp_str, struct sexp* sexp, bool dryrun);
+sexp_read(const char* sexp_str, struct sexp_static* sexp, bool dryrun);
 
 s32
-sexp_fprint(const struct sexp*, FILE*);
+sexp_fprint(const struct sexp_static*, FILE*);
 
 s32
-sexp_print(const struct sexp*);
+sexp_print(const struct sexp_static*);
 
 s32
-sexp_serialize(const struct sexp* sexp, char* buffer, size_t size);
+sexp_serialize(const struct sexp_static* sexp, char* buffer, size_t size);
 
 
-struct sexp*
-sexp_append(struct sexp* dst, const struct sexp* src);
+struct sexp_static*
+sexp_append(struct sexp_static* dst, const struct sexp_static* src);
 
-struct sexp*
-sexp_append_dat(struct sexp* dst, void* dat, size_t len, enum sexp_type type);
+struct sexp_static*
+sexp_append_dat(struct sexp_static* dst, void* dat, size_t len, enum sexp_type type);
 
 
 // returns how much memory it would take to represent the data if it were a
@@ -121,13 +141,13 @@ sexp_size(enum sexp_type type, void* data);
 
 /* returns the number of elements in the sexp list. */
 size_t
-sexp_length(const struct sexp* sexp);
+sexp_length(const struct sexp_static* sexp);
 
-const struct sexp*
-sexp_nth(const struct sexp* list, size_t n);
+const struct sexp_static*
+sexp_nth(const struct sexp_static* list, size_t n);
 
-const struct sexp*
-sexp_find(const struct sexp* s, char* atom);
+const struct sexp_static*
+sexp_find(const struct sexp_static* s, char* atom);
 
 /*************************** Malloc Implementation ****************************/
 
@@ -163,14 +183,32 @@ struct sexp_dyn {
 };
 
 struct sexp_dyn *sexp_dyn_read(char *str);
-struct sexp_dyn *sexp_to_dyn(const struct sexp *sexp);
+struct sexp_dyn *sexp_to_dyn(const struct sexp_static *sexp);
+struct sexp_static *sexp_from_dyn(const struct sexp_dyn *sexp);
 
 struct sexp_dyn *make_cons(struct sexp_dyn *car, struct sexp_dyn *cdr);
 struct sexp_dyn *make_integer(s32 num);
-struct sexp_dyn *make_symbol(char *symbol);
-struct sexp_dyn *make_string(char *text);
+struct sexp_dyn *make_symbol(const char *symbol);
+struct sexp_dyn *make_string(const char *text);
 
 // TODO implement this!
-struct sexp_dyn *make_tag();
+struct sexp_dyn *make_tag(void);
 
+/////////////////////// Malloc Implementation Utilities ////////////////////////
+/** Returns a cons list of the supplied elemqents*/
+struct sexp_dyn *list(struct sexp_dyn *sexp[]);
+
+void setcar(struct sexp_dyn *dst, struct sexp_dyn *car);
+void setcdr(struct sexp_dyn *dst, struct sexp_dyn *cdr);
+struct sexp_dyn *car(const struct sexp_dyn *sexp);
+struct sexp_dyn *cdr(const struct sexp_dyn *sexp);
+
+/** Add item to the end of the list. */
+void append(struct sexp_dyn *list, struct sexp_dyn *item);
+
+/** Return the nth element (car) of the list. */
+struct sexp_dyn *nth(const struct sexp_dyn *sexp, u32 n);
+
+bool is_nil(const struct sexp_dyn *sexp);
+u32 length(const struct sexp_dyn *sexp);
 #endif

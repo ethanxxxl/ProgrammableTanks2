@@ -31,6 +31,7 @@ int player_idle_handler(struct player_manager *p, struct message msg) {
                 snprintf(buf, 50, "authenticated %s.", p->username);
             if (ret < 0)
                 return -1; // name was too large for the buffer.
+
             
             message_send_conf(p->socket, MSG_RESPONSE_SUCCESS,
                               buf);

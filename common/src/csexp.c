@@ -288,7 +288,7 @@ struct reader_result
 sexp_read(const char* sexp_str, struct sexp* sexp, bool dryrun) {
     while (isspace(*sexp_str) && *sexp_str != '\0') sexp_str++;
     if (*sexp_str == ')')
-        return result_err(RESULT_INVALID_CHARACTER, sexp_str);
+        return result_err(RESULT_INVALID_CHARACTER, p_str);
 
     struct reader_result result = sexp_reader(&sexp_str, sexp, dryrun);
 
@@ -699,6 +699,18 @@ struct sexp_dyn *sexp_to_dyn(const struct sexp *sexp) {
         return make_symbol((char *)sexp->data);
     case SEXP_TAG:
         return make_tag();
+    }
+}
+
+// TODO fill this out.
+struct sexp_static *sexp_from_dyn(struct sexp_dyn *sexp) {
+    switch (sexp->type) {
+    case SEXP_CONS: {
+        
+    }
+    case SEXP_INTEGER:
+    case SEXP_STRING:
+    case SEXP_TAG:
     }
 }
 

@@ -34,22 +34,40 @@ enum message_type {
 
   // RESPONSES
   MSG_RESPONSE_SCENARIO_TICK = 0x80,
-
-  MSG_RESPONSE_SUCCESS,
-  MSG_RESPONSE_FAIL,
-  MSG_RESPONSE_INVALID_REQUEST,
+  MSG_RESPONSE_STATUS,
 
   MSG_RESPONSE_NULL, // not an actual message type
   
   MSG_NULL ,
 };
 
+struct sexp_dyn *make_message(enum message_type type);
+void message_send(int fd, const struct sexp_dyn *message);
+struct sexp_dyn *message_recv(int fd, struct vector *buf);
+
 /* TEXT
  *
  * Many messages are simply status messages with the option to include ascii
  * text for debug/logging purposes. This generic message is associated with the
  * text field in the message union. */
-struct sexp *make_text_message();
+struct sexp_dyn *make_text_message(const char *message);
+const char *unwrap_text_message(const struct sexp_dyn *msg);
+/* STATUS
+
+   A message that indicates whether the previous message sent by the client was:
+   - SUCCESS
+   - FAIL
+   - INVALID_MESSAGE
+*/
+
+enum message_status {
+  MESSAGE_STATUS_SUCCESS,
+  MESSAGE_STATUS_FAIL,
+  MESSAGE_STATUS_INVALID_MESSAGE,
+};
+
+struct sexp_dyn *make_status_message(enum message_status status);
+enum message_status unwrap_status_message(const struct sexp_dyn *msg);
 
 /* USER_CREDENTIALS
  *
@@ -57,9 +75,14 @@ struct sexp *make_text_message();
  * */
 struct user_credentials {
     struct vector* username;
+    struct vector* password;
 };
 
-struct sexp *make_user_credentials_message();
+struct sexp_dyn *
+make_user_credentials_message(const struct user_credentials *creds);
+
+struct user_credentials
+unwrap_user_credentials_message(const struct sexp_dyn *msg);
 
 /* PLAYER_UPDATE
  *
@@ -70,7 +93,12 @@ struct player_update {
     struct vector* tank_target_coords;
     struct vector* tank_instructions;
 };
-struct sexp *make_player_update_message();
+
+struct sexp_dyn *
+make_player_update_message(const struct player_update *player_update);
+
+struct player_update unwrap_player_update_message(const struct sexp_dyn *msg);
+
 
 /* SCENARIO_TICK
  *
@@ -80,9 +108,8 @@ struct sexp *make_player_update_message();
 struct scenario_tick {
     struct vector* players_public_data;
 };
-struct sexp *make_player_update_message();
 
-s32 message_send(int fd, const struct sexp *sexp);
-struct sexp *message_recv;
+struct sexp_dyn *make_scenario_tick_message(const struct scenario_tick *tick);
+struct scenario_tick unwrap_scenario_tick_message(const struct sexp_dyn *msg);
 
 #endif
