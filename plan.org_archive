@@ -1,0 +1,235 @@
+#    -*- mode: org -*-
+
+
+Archived entries from file /home/ethan/Documents/C/ProgrammableTanks2/plan.org
+
+
+* Networking Specification
+  :PROPERTIES:
+  :ARCHIVE_TIME: 2024-10-02 Wed 19:34
+  :ARCHIVE_FILE: ~/Documents/C/ProgrammableTanks2/plan.org
+  :ARCHIVE_CATEGORY: plan
+  :END:
+  Network connections between the client (player) and the server are stateful.
+  A client can be in one of three states: /Idle/, /Lobby/, or /Scenario/.  The
+  client can transition between these states by sending the appropriate message
+  to the server.
+
+  The format of all messages that are sent between client and server is listed
+  in subsequent sections.
+
+** Header Structure
+   All data encoded in a message will be in network order (big-endian). 
+
+   Message header data will be 8 bytes in length, and consist of two fields:
+   /Message Type/ and /Body Length/.
+
+   #+CAPTION: Message Header
+   | Byte |            0 |         1-4 |
+   | Desc | Message Type | Body Length |
+
+   While sets of messages sent by the client and server are mutually exclusive,
+   each /Message Type/ will be unique.  Message Types from ~0x00~ through ~0x7f~
+   originate from the client.  /Message Types/ from ~0x80~ through ~0xff~
+   originate from the server.
+   
+** Message Type Summary
+   #+CAPTION: Summary of Messages
+   | /Message Type/ | Description              |
+   |----------------+--------------------------|
+   |           0x00 | REQUEST_AUTHENTICATE     |
+   |           0x01 | REQUEST_LIST_SCENARIOS   |
+   |           0x02 | REQUEST_CREATE_SCENARIO  |
+   |           0x03 | REQUEST_JOIN_SCENARIO    |
+   |           0x04 | REQUEST_PLAYER_UPDATE    |
+   |           0x05 | REQUEST_RETURN_TO_LOBBY  |
+   |           0x06 | REQUEST_DEBUG            |
+   |----------------+--------------------------|
+   |           0x80 | RESPONSE_SCENARIO_TICK   |
+   |           0x81 | RESPONSE_SUCCESS         |
+   |           0x82 | RESPONSE_FAIL            |
+   |           0x83 | RESPONSE_INVALID_REQUEST |
+   
+** IDLE State Requests
+   #+CAPTION: Messages sent by the client in the IDLE state
+   | /Message Type/ | Description              |
+   |----------------+--------------------------|
+   |           0x00 | REQUEST_AUTHENTICATE     |
+   
+
+** LOBBY State Requests
+   #+CAPTION: Messages sent by the client in the LOBBY state
+   | /Message Type/ | Description             |
+   |----------------+-------------------------|
+   |           0x01 | REQUEST_LIST_SCENARIOS  |
+   |           0x02 | REQUEST_CREATE_SCENARIO |
+   |           0x03 | REQUEST_JOIN_SCENARIO   |
+   
+** SCENARIO State Requests
+   #+CAPTION: messages sent by the client in the SCENARIO state
+   | /Message Type/ | Description             |
+   |----------------+-------------------------|
+   |           0x04 | REQUEST_PLAYER_UPDATE   |
+   |           0x05 | REQUEST_RETURN_TO_LOBBY |
+   |           0x06 | REQUEST_DEBUG           |
+
+*** REQUEST_PLAYER_UPDATE
+    A PLAYER_UPDATE message should be sent by each client in a scenario at least
+    once per tick.  This message contains contain two sections (in order):
+    - TANK_INSTRUCTIONS
+    - TANK_TARGETS
+
+    Each section is a list containing data points that describe the tank at each
+    index.  The number of tanks in these sections does not need to be sent to
+    the server, as the server specifies how many tanks each user has in the
+    first place.
+      
+    The data points for each section are formatted accordingly:
+
+    #+CAPTION: PLAYER_UPDATE Section Formats
+    | Section           | Data Point Format        |
+    |-------------------+--------------------------|
+    | TANK_INSTRUCTIONS | [8-bit instruction data] |
+    | TANK_TARGET       | [32-bit x][32-bit y]     |
+
+
+    The instruction data encodes what the tank is supposed to do on that turn:
+    #+CAPTION: TANK_INSTRUCTIONS value map
+    | Value | Name   | Description                                        |
+    |     0 | MOVE   | The tank should move to TARGET                     |
+    |     1 | FIRE   | The tank should shoot at TARGET                    |
+    |     2 | REPAIR | TARGET is ignored.  Tank attempts to repair itself |
+    
+*** REQUEST_RETURN_TO_LOBBY
+    There is no body associated with this message.  Upon reception by the
+    server, the player associated with the connection will be sent to the lobby.
+
+*** REQUEST_DEBUG
+    
+** Server Responses
+   | /Message Type/ | Description              |
+   |----------------+--------------------------|
+   |           0x80 | RESPONSE_SCENARIO_TICK   |
+   |           0x81 | RESPONSE_SUCCESS         |
+   |           0x82 | RESPONSE_FAIL            |
+   |           0x83 | RESPONSE_INVALID_REQUEST |
+
+*** RESPONSE_SCENARIO_TICK
+    In a particular scenario, all connected clients will periodically receive
+    this message.  This ~SCENARIO_TICK~ message indicates that a turn in the
+    scenario has passed, and the next one is beginning.  The tick message will
+    also include a copy of the scenario state.
+    
+    /in future iterations of this specification, it may be necessary to limit
+    how much information is sent.  It may be unnecessary to send a complete
+    snapshot of everything in the scenario.  Only an update of what has changed
+    since the previous tick may be required./
+
+    the body of a ~SCENARIO_TICK~ will consist of three /sections/ in the
+    following order:
+    - USERNAMES
+    - NUM_TANKS
+    - TANK_POSITIONS
+
+    Each /section/ will consist of N /entries/.  N is determined by the number
+    of usernames in the USERNAMES section.
+
+    The USERNAMES section will consist of ASCII usernames separated by commas.
+    As previously mentioned, the number of usernames in this section determines
+    the number of entries in subsequent sections.  This section will be
+    terminated by a null character '\0'.
+
+    for example, a valid USERNAMES section for a scene with four users will look
+    like this:
+    
+    : "MindM4ge202,StratS0rc3rer5,R1ddleRebel13,Cr4ftyConjurer11"
+
+    The next section, NUM_TANKS, specifies how many tanks are associated with
+    each user.  There will be N entries in this section.  Each entry will be a
+    32-bit integer (big-endian).  Continuing with the previous example, a valid
+    NUM_TANKS section may be seen as follows:
+
+    | bytes     | 0-3 | 4-7 | 8-11 | 12-15 |
+    | NUM_TANKS |   5 |   5 |    8 |     8 |
+
+    The next section, TANK_POSITIONS, consists of N entries, where each entry is
+    a list of /data points/ related to the tank at that index.  Simply put, each
+    /data point/ describes a tank that belongs to a user.
+
+    As previously described, the TANK_POSITIONS section contains N entries.
+    Each entry is a list of data points that describe the position of the tank
+    being indexed.  A tank position data point consists of an x and y value,
+    each 32 bits in size.  Thus each data point will be 64 bits in length
+    
+*** RESPONSE_SUCCESS
+*** RESPONSE_FAIL
+*** RESPONSE_INVALID_REQUEST
+
+
+
+* Program Structure
+  :PROPERTIES:
+  :ARCHIVE_TIME: 2024-10-02 Wed 19:35
+  :ARCHIVE_FILE: ~/Documents/C/ProgrammableTanks2/plan.org
+  :ARCHIVE_CATEGORY: plan
+  :END:
+** DONE File Structure
+   <2024-01-06 Sat>
+
+   as the program has grown more complex, I found the need to reorganize the file
+   structure, especially considering the abysmal state of ~client.c~. Below I
+   consider two options for how to structure the filesystem.  I ended up going
+   with option 2.
+*** Option 1
+   keep all sources together.  keep all includes together.
+   
+   - include/
+     + client-headers/
+     + server-headers/
+     + common-header-1
+     + common-header-2
+     + ...
+   - src/
+     + client-src/
+     + server-src/
+     + common-src-1
+     + common-src-2
+
+*** Option 2
+    separate the binaries, but keep the translation units common to both in
+    a separate include.
+   
+    - include/
+      + common-header-1
+      + common-header-2
+    - src/
+      + common-src-1
+      + common-src-2
+       
+    - client/
+      + include/
+      + src/
+    - server/
+      + include/
+      + src/
+
+    really what you are doing here is just creating multiple binaries and a
+    couple of libraries.  I like option 2 better.
+    
+** Connection Manager
+   The initial layer is where incoming connections and data packets are received
+   and deserialized.  Once the deserialization and post-processing are done, the
+   resulting data is sent to the client manager layer.
+
+** Player Client Manager
+   After the packet has been reconstructed and is passed to this layer, the
+   player managers will track the state of a player (what scenario are they in,
+   player data, etc.) and handle the messages that the player is sending to the
+   server.
+
+** Scenario Manager
+   If the player is in a scenario, then scenario messages will be sent to the
+   applicable scenario layer to be validated and applied.  It is in the scenario
+   where tank positions will be updated or scheduled.
+    
+   
