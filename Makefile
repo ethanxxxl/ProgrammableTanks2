@@ -6,12 +6,13 @@
 # @version 0.1
 
 CC = clang
-CFLAGS = -Wall -Wextra -Werror -Wunused-result -pedantic -ftrapv -std=gnu2x -g3 -O0
+CFLAGS = -Wall -Wextra -Werror -Wunused-result -pedantic -ftrapv -std=gnu23 -g3 -O0
 
 BUILDDIR = target
 
 COMMON_DIR = common/src
-SRC_COMMON = vector.c command-line.c scenario.c csexp.c message.c
+SRC_COMMON = vector.c command-line.c scenario.c message.c result.c \
+             sexp/sexp-base.c sexp/sexp-io.c sexp/sexp-utils.c
 
 SERVER_DIR = server/src
 SRC_SERVER = main.c server-scenario.c player_manager.c server-commands.c
