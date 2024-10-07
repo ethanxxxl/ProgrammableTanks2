@@ -1,9 +1,10 @@
-#ifndef RESULT_H
-#define RESULT_H
+#ifndef ERROR_H
+#define ERROR_H
 
 #include "nonstdint.h"
 
 #include <stddef.h>
+
 
 // TODO create a global/thread-local error list that holds references to errors
 // until they are handled.  This will allow errors to be caught and logged when
@@ -24,19 +25,18 @@ struct error {
 
 // Helper Functions
 const char *describe_error(const struct error e);
-
 void free_error(const struct error e);
 
 /******************************* Generic Error ********************************/
-const char *describe_error_generic(void *self);
-void free_error_generic(void *self);
+const char *describe_generic_error(void *self);
+void free_generic_error(void *self);
 
-const struct error_ops ERROR_GENERIC_OPS = {
-    .describe = describe_error_generic,
-    .free = free_error_generic,
+const struct error_ops GENERIC_ERROR_OPS = {
+    .describe = describe_generic_error,
+    .free = free_generic_error,
 };
 
-struct error make_error_generic(const char* error_message);
+struct error generic_error(const char *error_message);
 
 /***************************** Result Object Type *****************************/
 
@@ -57,32 +57,41 @@ enum result_status {
     RESULT_ERROR,
 };
 
-#define DEFINE_RESULT_TYPE(type)                        \
-    struct result_##type {                              \
-        enum result_status status;                      \
-        union {                                         \
-            struct error error;                         \
-            type result;                                \
-        };                                              \
-    };                                                  \
-                                                        \
-    type result_unwrap_##type(struct result_##type r) { \
-        return r.result;                                \
-    }                                                   \
+#define DEFINE_RESULT_TYPE(type)                                               \
+  struct result_##type {                                                       \
+    enum result_status status;                                                 \
+    union {                                                                    \
+      struct error error;                                                      \
+      type ok;                                                                 \
+    };                                                                         \
+  };                                                                           \
+                                                                               \
+  type result_unwrap_##type(struct result_##type r) { return r.ok; }           \
+  struct result_##type result_##type##_ok(type t) {                            \
+    return (struct result_##type){.status = RESULT_OK, .ok = t};               \
+  }                                                                            \
+  struct result_##type resutl_##type##_error(struct error e) {                 \
+    return (struct result_##type){.status = RESULT_ERROR, .error = e};         \
+  }
 
-#define DEFINE_RESULT_TYPE_PTR(type)                            \
-    struct result_##type##_ptr {                                \
-        enum result_status status;                              \
-        union {                                                 \
-            struct error error;                                 \
-            type *result;                                       \
-        };                                                      \
-    };                                                          \
-                                                                \
-    type *result_unwrap_##type(struct result_##type##_ptr r) {  \
-        return r.result;                                        \
-    }                                                           \
-  
+#define DEFINE_RESULT_TYPE_CUSTOM(type, name)                                  \
+  struct result_##name {                                                       \
+    enum result_status status;                                                 \
+    union {                                                                    \
+      struct error error;                                                      \
+      type ok;                                                                 \
+    };                                                                         \
+  };                                                                           \
+                                                                               \
+  type result_unwrap_##name(struct result_##name r) { return r.ok; }           \
+                                                                               \
+  struct result_##name result_##name##_ok(type t) {                            \
+    return (struct result_##name){.status = RESULT_OK, .ok = t};               \
+  }                                                                            \
+  struct result_##name result_##name##_error(struct error e) {                 \
+    return (struct result_##name){.status = RESULT_ERROR, .error = e};         \
+  }
+
 DEFINE_RESULT_TYPE(s8)
 DEFINE_RESULT_TYPE(s16)
 DEFINE_RESULT_TYPE(s32)
@@ -94,6 +103,6 @@ DEFINE_RESULT_TYPE(u64)
 DEFINE_RESULT_TYPE(f32)
 DEFINE_RESULT_TYPE(f64)
 
-DEFINE_RESULT_TYPE_PTR(char)
-     
+DEFINE_RESULT_TYPE_CUSTOM(char *, str)
+
 #endif

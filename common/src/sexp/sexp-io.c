@@ -1,20 +1,35 @@
 #include "sexp/sexp-io.h"
+#include "sexp/sexp-base.h"
+
+#include <ctype.h>
+#include <string.h>
+#include <stdlib.h>
 
 /*************************** SEXP READER FUNCITONS ****************************/
 
-struct reader_result
-sexp_read_atom(const char** caller_cursor, struct sexp* sexp, bool dryrun) {
+/* TODO this must have the following type signature
+   struct reader_result sexp_read_atom(const char** caller_cursor, bool dryrun)
+ */
+
+/* how does this thing even work???
+   we set our cursor that we get from another context,
+
+ */
+
+struct result_sexp
+sexp_read_atom(const char** caller_cursor) {
     const char* cursor = *caller_cursor;
     while (isspace(*cursor) && *cursor != '\0') cursor++;
 
     if (memchr("\0])", *cursor, 3) != 0)
-        return result_err(RESULT_ERR, cursor);
+        // TODO get the right error here
+        return reader_err(0, *caller_cursor, cursor);
 
     // test for netstring
     const char* digit_end = cursor;
     u32 atom_len = strtoul((char*)cursor, (char**)&digit_end, 10);
 
-    struct reader_result error;
+    struct result_sexp error;
 
     char* delims;
     u32 num_delims;
@@ -24,12 +39,14 @@ sexp_read_atom(const char** caller_cursor, struct sexp* sexp, bool dryrun) {
         SPECIAL_SYMBOL,
         SYMBOL,
     } atom_type;
-    
+
+    // TODO add a check for atom data length (can't be longer than 27 bits)
+
     if (digit_end != cursor && *digit_end == ':') {
         // this symbol is a netstring.
         if (!dryrun) {
             sexp->type = SEXP_SYMBOL;
-            sexp->length = atom_len;
+            sexp->data_length = atom_len;
             memcpy(sexp->data, digit_end+1, atom_len);
         }
 
@@ -257,8 +274,12 @@ sexp_reader(const char** caller_cursor, struct sexp* sexp, bool dryrun) {
     return result;
 }
 
-struct reader_result
-sexp_read(const char* sexp_str, struct sexp* sexp, bool dryrun) {
+struct result_sexp
+sexp_read(const char* sexp_str, enum sexp_reader_method method) {
+    const size_t buffer_size_hint = 30;
+    u8 *sexp_buffer = malloc(buffer_size_hint);
+
+        
     while (isspace(*sexp_str) && *sexp_str != '\0') sexp_str++;
     if (*sexp_str == ')')
         return result_err(RESULT_INVALID_CHARACTER, p_str);
@@ -489,13 +510,13 @@ sexp_serialize_integer(const struct sexp *sexp, char *buffer, size_t size) {
     return snprintf(buffer, size, "%d", *(u32*)sexp->data);
 }
 
-s32
+struct result_str
 sexp_serialize_list(const struct sexp *sexp, char *buffer, size_t size) {
     if (buffer == NULL && size != 0)
-        return -1;
+        return generic_error("this is an error");
     
     if (sexp == NULL || sexp->type != SEXP_CONS)
-        return -1;
+        return generic_error("another error");
     
     if (sexp->length < sizeof(struct sexp))
         return snprintf(buffer, size, "()");
@@ -539,12 +560,17 @@ sexp_serialize_list(const struct sexp *sexp, char *buffer, size_t size) {
     return list_len;
 }
 
-s32
-sexp_serialize(const struct sexp* sexp, char* buffer, size_t size) {
+char *_sexp_serialize(const struct sexp *sexp, char *buffer, size_t len, size_t cap) {
+    
+}
+
+
+struct result_str sexp_serialize(const struct sexp *sexp) {
     // this function should return the number of bytes written to the buffer.
     // If buffer is NULL, then no bytes are written.  If buffer is NULL and size
     // is 0, no bytes are written, but the function will return the number of
     // bytes that would have been written if the buffer existed.
+    
     if (sexp == NULL)
         return -1;
 
