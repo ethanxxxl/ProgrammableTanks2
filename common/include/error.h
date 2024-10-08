@@ -5,7 +5,6 @@
 
 #include <stddef.h>
 
-
 // TODO create a global/thread-local error list that holds references to errors
 // until they are handled.  This will allow errors to be caught and logged when
 // they are generated and not handled.
@@ -28,15 +27,15 @@ const char *describe_error(const struct error e);
 void free_error(const struct error e);
 
 /******************************* Generic Error ********************************/
-const char *describe_generic_error(void *self);
-void free_generic_error(void *self);
+const char *describe_msg_error(void *self);
+void free_msg_error(void *self);
 
-const struct error_ops GENERIC_ERROR_OPS = {
-    .describe = describe_generic_error,
-    .free = free_generic_error,
+const struct error_ops MSG_ERROR_OPS = {
+    .describe = describe_msg_error,
+    .free = free_msg_error,
 };
 
-struct error generic_error(const char *error_message);
+struct error make_msg_error(const char *msg);
 
 /***************************** Result Object Type *****************************/
 
@@ -72,6 +71,10 @@ enum result_status {
   }                                                                            \
   struct result_##type resutl_##type##_error(struct error e) {                 \
     return (struct result_##type){.status = RESULT_ERROR, .error = e};         \
+  }                                                                            \
+  struct result_##type resutl_##type##_msg_error(const char *str) {            \
+    return (struct result_##type){.status = RESULT_ERROR,                      \
+                                  .error = make_msg_error(str)};               \
   }
 
 #define DEFINE_RESULT_TYPE_CUSTOM(type, name)                                  \
@@ -90,6 +93,10 @@ enum result_status {
   }                                                                            \
   struct result_##name result_##name##_error(struct error e) {                 \
     return (struct result_##name){.status = RESULT_ERROR, .error = e};         \
+  }                                                                            \
+  struct result_##name result_##name##_msg_error(const char *str) {            \
+    return (struct result_##name){.status = RESULT_ERROR,                      \
+                                  .error = make_msg_error(str)};               \
   }
 
 DEFINE_RESULT_TYPE(s8)
@@ -104,5 +111,12 @@ DEFINE_RESULT_TYPE(f32)
 DEFINE_RESULT_TYPE(f64)
 
 DEFINE_RESULT_TYPE_CUSTOM(char *, str)
+
+/****************************** Convience Macros ******************************/
+#define PROGAM_CONTEXT_STR                                                     \
+  "------------------------------\n"                                           \
+  "file: \"" __FILE__ "\"\n"                                                   \
+  "line: " __LINE__ "\n"                                                       \
+  "in " __func__ "\n"
 
 #endif

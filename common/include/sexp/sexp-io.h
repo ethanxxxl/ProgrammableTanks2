@@ -6,14 +6,6 @@
 #include <stdbool.h>
 #include <stdio.h>
 
-// FIXME sexp_static needs removed
-struct sexp_static;
-
-enum sexp_reader_method {
-    READ_LINEAR,
-    READ_TREE
-};
-
 /** Reads the S-Expression (sexp) in the provided string and returns a sexp
     object or an error.  
 
@@ -35,10 +27,10 @@ struct result_sexp sexp_read(const char *sexp_str,
 
 /* TODO finish documenting this function*/
 /** Serialize the sexp and send it to the specified file. */
-s32 sexp_fprint(const struct sexp_static*, FILE*);
+s32 sexp_fprint(const struct sexp*, FILE*);
 
 /* TODO document this function*/
-s32 sexp_print(const struct sexp_static*);
+s32 sexp_print(const struct sexp*);
 
 /** Serializes the S-Expression and returns a pointer to the resulting string.
     WARNING: this value must be free'ed!

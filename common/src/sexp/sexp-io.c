@@ -275,9 +275,11 @@ sexp_reader(const char** caller_cursor, struct sexp* sexp, bool dryrun) {
 }
 
 struct result_sexp
-sexp_read(const char* sexp_str, enum sexp_reader_method method) {
+sexp_read(const char* sexp_str, enum sexp_memory_method method) {
     const size_t buffer_size_hint = 30;
     u8 *sexp_buffer = malloc(buffer_size_hint);
+
+    
 
         
     while (isspace(*sexp_str) && *sexp_str != '\0') sexp_str++;
@@ -513,10 +515,10 @@ sexp_serialize_integer(const struct sexp *sexp, char *buffer, size_t size) {
 struct result_str
 sexp_serialize_list(const struct sexp *sexp, char *buffer, size_t size) {
     if (buffer == NULL && size != 0)
-        return generic_error("this is an error");
+        return make_generic_error("this is an error");
     
     if (sexp == NULL || sexp->type != SEXP_CONS)
-        return generic_error("another error");
+        return make_generic_error("another error");
     
     if (sexp->length < sizeof(struct sexp))
         return snprintf(buffer, size, "()");

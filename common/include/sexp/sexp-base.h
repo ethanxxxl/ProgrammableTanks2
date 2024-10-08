@@ -6,7 +6,25 @@
 #include "error.h"
 
 /**************************** SEXP IMPLEMENTATION *****************************/
+/** The S-Expression (sexp) memory layout/allocation method.
 
+    1. The `SEXP_MEMORY_LINEAR` method uses a single contiguous block of memory
+    to store all data related to the sexp
+
+    2. The `SEXP_MEMORY_TREE` method allocates memory for every cons/atom in a
+    sexp.
+*/
+enum sexp_memory_method {
+    SEXP_MEMORY_LINEAR,
+    SEXP_MEMORY_TREE
+};
+
+/** Type of S-Expression (sexp) element.
+
+    This implementation of sexp contains the types listed in this enumeration.
+    Custom types that extend the implmentation are created using the `SEXP_TAG`
+    type.
+ */
 enum sexp_type {
     SEXP_CONS = 0x0,
     SEXP_SYMBOL = 0x1,
@@ -15,61 +33,63 @@ enum sexp_type {
     SEXP_TAG = 0x4,
 };
 
+/** Fundamental structure for both S-Expression implementations. */
 struct cons {
     struct sexp *car;
     struct sexp *cdr;
 };
 
-/**
- * There are three types of items that can be represented by a sexp_item:
- * - <simple-string> :: <raw>
- * - <string>        :: <display>? <simple-string>
- * - <list>          :: "(" <sexp>* ")"
- *
- * These will be represented in memory as follows:
- * TYPE LENGTH DATA
- *
- * Where TYPE is a u8, LENGTH is a u32, and DATA is as many bytes as indicated
- * by LENGTH.
- *
- * This structure is intended to allow for more convenient access to the
- * elements in a data stream.
- *
- * @param type Either SEXP_SIMPLE_STRING, SEXP_STRING, or SEXP_LIST.
- * @param length The length of data.
- * @param data Actual data encoded by the sexp_item.
- */
-
 /** Universial S-Expression Structure
 
- This structure represents an S-Expression (sexp) in memory.  There are two
- implementations available for this representation: Dynamic and Static.  The
- dynamic implementation allocates a new sexp structure every time one is
- created.  The static implementation conatinas all sexps in a contiguous block
- of memory, and an allocation is static or on the stack.
+    This structure represents an S-Expression (sexp) in memory.  There are two
+    implementations available for this representation: linear and tree.  The
+    Tree implementation allocates a new sexp structure every time one is
+    created.  The linear implementation conatinas all sexps in a contiguous
+    block of memory.
 
- Static and dynamic sexpression will not be mixed.
+    Static and dynamic sexp's are not mixed with each other.  It is not
+    advisable to create your own sexp object or modify any of the fields, as
+    this may invalidate the structure, or worse, cause a memory leak or
+    segmentation fault.
+
+    NOTE: currently this implementation does not support dotted forms.
+
+    @param is_linear boolean value that specifies the memory layout of the
+    structure.
+
+    @param is_root boolean flag used for sexp's with a linear layout.  Linear
+    sexps must know the capacity of the entire block of data allocated in
+    addition to the length of used space.  This is accomplished through an
+    implicit/hidden CONS cell as the root sexp.  The CAR of this CONS cell
+    contains an integer SEXP that tracks buffer capaicity.  The CDR contains the
+    actual first element of the sexp.
+
+    @param sexp_type corresponds to the `sexp_type` enumeration.  This field
+    specifies the format of the `data` field.
+
+    @param data_length the remaining bits in the 4 byte bit field are used to
+    indicate the length (in bytes) of the data stored in the `data` flexible
+    array member at the end of this structure.
+
+    @param data flexible array member that corresponds to an ASCII c-string when
+    `sexp_type` is SEXP_SYMBOL or SEXP_STRING. `data` maps to the `sexp_data`
+    union for all other values of `sexp_type`, unless the linear layout is used.
+    In a linear layout, `data` maps to `sexp_data` when `sexp_type` is not
+    `SEXP_CONS`.  When `sexp_type` is `SEXP_CONS`, `data` contains more sexp
+    structures, one after another, each containing their own length.
 */
-// FIXME there is a problem here: for the linear style you don't know the
-// capacity of the sexp.
-
-// XXX maybe you can create a custom type just for the start of the linear sexp,
-// that contains capacity information?  or perhaps, implicitly, every linear
-// root sexp is a CONS, and the CAR contains the capacity, and the CDR contains
-// the SEXP that is actually encoded.
 struct sexp {
     u32 is_linear: 1;
     u32 is_root: 1;
     u32 sexp_type: 3;
     u32 data_length: 27;
     
-    enum sexp_type type;
-    union {
-        struct cons cons;
-        s32 integer; // TODO can this be an s64 and not take up any more space?
-    };
-
     u8 data[];
+};
+
+union sexp_data {
+    struct cons cons;
+    s32 integer;
 };
 
 /************************** ERRORS AND RETURN TYPES ***************************/
@@ -138,5 +158,14 @@ struct result_sexp reader_err(enum sexp_reader_error_code code,
 
 /** Tagged Union for the reader, utilities, etc.*/
 DEFINE_RESULT_TYPE_CUSTOM(struct sexp *, sexp)
+
+    
+/******************************** INITIALIZERS ********************************/
+/** Initialize a new S-Expression (sexp) object.
+
+    creates a new sexp type, using the method
+*/
+struct result_sexp make_sexp(enum sexp_type type,
+                             enum sexp_memory_method method);
 
 #endif

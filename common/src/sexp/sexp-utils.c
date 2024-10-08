@@ -116,8 +116,6 @@ struct sexp_dyn *sexp_to_dyn(const struct sexp *sexp) {
     }
 }
 
-size_t get_static_space(struct sexp_dyn *sexp);
-
 // TODO fill this out.
 struct sexp_static *sexp_from_dyn(struct sexp_dyn *sexp, u8 *buf, size_t len) {
     switch (sexp->type) {
@@ -149,68 +147,3 @@ struct sexp_dyn *sexp_dyn_read(char *str) {
     return sexp_to_dyn(sexp);
 }
 
-struct sexp_dyn *make_cons(struct sexp_dyn *car, struct sexp_dyn *cdr) {
-    struct sexp_dyn *sexp = malloc(sizeof(struct sexp_dyn));
-    if (sexp == NULL) {
-        return NULL;
-    }
-    
-    sexp->type = SEXP_CONS;
-    sexp->cons.car = car;
-    sexp->cons.cdr = cdr;
-    return sexp;
-}
-
-struct sexp_dyn *make_integer(s32 num) {
-    struct sexp_dyn *sexp = malloc(sizeof(struct sexp_dyn));
-    if (sexp == NULL) {
-        return NULL;
-    }
-
-    sexp->type = SEXP_INTEGER;
-    sexp->integer = num;
-    return sexp;
-}
-
-struct sexp_dyn *make_symbol(char *symbol) {
-    struct sexp_dyn *sym = make_string(symbol);
-    sym->type = SEXP_SYMBOL;
-    return sym;
-}
-
-struct sexp_dyn *make_string(char *str) {
-    size_t length = strlen(str);
-    struct sexp_dyn *sexp = malloc(sizeof(struct sexp_dyn) + length);
-    if (sexp == NULL) {
-        return NULL;
-    }
-
-    sexp->type = SEXP_STRING;
-    memcpy(sexp->text, str, length);
-    sexp->text_len = length;
-
-    return sexp;
-}
-
-// TODO implement this
-struct sexp_dyn *make_tag() {
-    return NULL;
-}
-
-void free_sexp_dyn(struct sexp_dyn *sexp) {
-    if (sexp->type == SEXP_CONS) {
-        struct cons cons = sexp->cons;
-
-        free(sexp);
-
-        if (cons.car != sexp)
-            free_sexp_dyn(cons.car);
-
-        if (cons.cdr != sexp)
-            free_sexp_dyn(cons.cdr);
-        return;
-    }
-
-    free(sexp);
-    return;
-}
