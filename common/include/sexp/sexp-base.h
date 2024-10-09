@@ -24,6 +24,9 @@ enum sexp_memory_method {
     This implementation of sexp contains the types listed in this enumeration.
     Custom types that extend the implmentation are created using the `SEXP_TAG`
     type.
+
+    The `SEXP_LIST_TERMINATOR` is used as the last element in linear sexp lists.
+    
  */
 enum sexp_type {
     SEXP_CONS = 0x0,
@@ -31,6 +34,8 @@ enum sexp_type {
     SEXP_STRING = 0x2,
     SEXP_INTEGER = 0x3,
     SEXP_TAG = 0x4,
+
+    SEXP_LIST_TERMINATOR = 0x5,
 };
 
 /** Fundamental structure for both S-Expression implementations. */
@@ -38,6 +43,12 @@ struct cons {
     struct sexp *car;
     struct sexp *cdr;
 };
+
+// there is a problem here.  If you pass a linear sexp to a function, that
+// function can know if it is the root or not.  There is know way to find the
+// root if the function is operating on a child node.
+
+// 
 
 /** Universial S-Expression Structure
 
@@ -53,16 +64,34 @@ struct cons {
     segmentation fault.
 
     NOTE: currently this implementation does not support dotted forms.
+        
+    Linear S-Expressions
+    ============================================================================
+    When initialized, regardless of the desired sexp type, root node is always
+    of type `SEXP_CONS`.  At a high level, this means every linear sexp takes
+    the form `(CAPACITY SEXP)`. `CAPACITY` is a `SEXP_INTEGER` and indicates how
+    much space was allocated via `malloc()`.  `SEXP` may be any sexp type.
+
+    Lists in a linear sexp are terminated with a sexp with type
+    `SEXP_LIST_TERMINATOR`.  This isn't a "real" sexp type, it is only used as
+    the last element in a list.  The `data_length` field of a
+    `SEXP_LIST_TERMINATOR` is used to indicate the size of the list in bytes.
+    Thus the "parent" of any sexp can be found be jumping back from the list
+    terminator.  This can be done recursively until the sexp with `is_root =
+    true` is found.
+
+    Tree S-Expressions
+    ============================================================================
 
     @param is_linear boolean value that specifies the memory layout of the
     structure.
 
-    @param is_root boolean flag used for sexp's with a linear layout.  Linear
-    sexps must know the capacity of the entire block of data allocated in
-    addition to the length of used space.  This is accomplished through an
-    implicit/hidden CONS cell as the root sexp.  The CAR of this CONS cell
-    contains an integer SEXP that tracks buffer capaicity.  The CDR contains the
-    actual first element of the sexp.
+    @param is_root boolean flag to indicate if the current sexp is the topmost
+    object.  Linear sexps must know the capacity of the entire block of data
+    allocated in addition to the length of used space.  This is accomplished
+    through an implicit/hidden CONS cell as the root sexp.  The CAR of this CONS
+    cell contains an integer SEXP that tracks buffer capaicity.  The CDR
+    contains the actual first element of the sexp.
 
     @param sexp_type corresponds to the `sexp_type` enumeration.  This field
     specifies the format of the `data` field.
@@ -86,6 +115,8 @@ struct sexp {
     
     u8 data[];
 };
+
+#define SEXP_MAX_LENGTH (0x7ffffff)
 
 union sexp_data {
     struct cons cons;
@@ -163,7 +194,7 @@ DEFINE_RESULT_TYPE_CUSTOM(struct sexp *, sexp)
 /******************************** INITIALIZERS ********************************/
 /** Initialize a new S-Expression (sexp) object.
 
-    creates a new sexp type, using the method
+    creates a new sexp type, using the indicated method.
 */
 struct result_sexp make_sexp(enum sexp_type type,
                              enum sexp_memory_method method);

@@ -117,9 +117,70 @@ void free_sexp(struct sexp *sexp) {
     return;
 }
 
+/** Helper function to initialize a linear sexp element.
 
-// TODO consider splitting this off into two functions, one that creates a
-// linear SEXP, another that creates a tree SEXP.
+    does not copy any data over.  `data` is only required when `type` is
+    `SEXP_STRING` or `SEXP_SYMBOL`.
+
+    @return total length of sexp.  When in a list, the next sexp can be found by
+    `dst + initialize_linear_sexp(type, dst, data)`
+*/
+s32 initialize_linear_sexp(enum sexp_type type,
+                            struct sexp *dst,
+                            void *data) {
+    size_t data_length = 0;
+
+    switch (type) {
+    case SEXP_SYMBOL:
+    case SEXP_STRING:
+        if (data != NULL)
+            data_length = strlen(data);
+        else
+            data_length = 0;
+        break;
+    case SEXP_INTEGER:
+        data_length = sizeof(s32);
+        break;
+    case SEXP_CONS:
+    case SEXP_TAG:
+    case SEXP_LIST_TERMINATOR:
+        data_length = 0;
+        break;
+    }
+
+    // FIXME add check for maximum length? is this necessary?
+
+    *dst = (struct sexp) {
+        .is_root = true,
+        .is_linear = true,
+        .sexp_type = type,
+        .data_length = data_length,
+    };
+
+    return sizeof(struct sexp) + data_length;
+}
+
+/** Sets the length of the terminator given a pointer to the parent (sexp with
+    type `SEXP_CONS`) and a pointer to the terminator.
+
+    @return length that was written to the terminator, or an error.
+*/
+struct result_s32 set_terminator_size(const struct sexp *cons,
+                                      struct sexp *term) {
+    if (cons == NULL)
+        return RESULT_MSG_ERROR(s32, "List start sexp is NULL");
+
+    if (term == NULL)
+        return RESULT_MSG_ERROR(s32, "List terminator sexp is NULL");
+
+    size_t data_len = ((u8 *)cons - (u8 *)term);
+
+    if (data_len > SEXP_MAX_LENGTH)
+        return RESULT_MSG_ERROR(s32, "List terminator size > 0x7FFFFFF!");
+
+    term->data_length = data_len;
+    return result_s32_ok(data_len);
+}
 
 struct result_sexp make_sexp(enum sexp_type type,
                              enum sexp_memory_method method) {
@@ -131,49 +192,44 @@ struct result_sexp make_sexp(enum sexp_type type,
            contains the actual object specified by the `type` parameter.  Thus,
            the initial size for this buffer must be at least 3 sexp structures
            large. */
-        u32 capacity = sizeof(struct sexp) * 3;
+        u32 capacity =
+            sexp_linear_size(SEXP_CONS) +
+            sexp_linear_size(SEXP_INTEGER) +
+            sexp_linear_size(type) +
+            sexp_linear_size(SEXP_LIST_TERMINATOR);
+        
         sexp = malloc(capacity);
 
         if (sexp == NULL) {
-            // return result_sexp_msg_error("Malloc returned NULL\n" PROGRAM_CONTEXT_STR);
+            return RESULT_MSG_ERROR(sexp, "Malloc returned NULL");
         }
 
-        // initialize CAR
-        struct sexp *car = (struct sexp *)sexp->data;
-        *car = (struct sexp) {
-            .is_linear = true,
-            .is_root = false,
-            .sexp_type = SEXP_INTEGER,
-            .data_length = sizeof(s32),
-        };
-        *(u32 *)sexp->data = capacity;
-        u32 car_size = sizeof(struct sexp) + car->data_length;
+        struct sexp *next_sexp = sexp;
+
+        // root sexp
+        next_sexp += initialize_linear_sexp(SEXP_CONS, next_sexp, NULL);
+        sexp->is_linear = true;
         
-        // initialize CDR
-        struct sexp *cdr = (struct sexp *)(car->data + car->data_length);
-        *cdr = (struct sexp) {
-            .is_linear = true,
-            .is_root = false,
-            .sexp_type = type,
-            .data_length = sexp_linear_size(SEXP_INTEGER),
-        };
+        // capacity sexp
+        next_sexp += initialize_linear_sexp(SEXP_INTEGER, next_sexp, NULL);
 
-        // TODO finish me!!!
-        *sexp = (struct sexp) {
-            .is_linear = true,
-            .is_root = true,
-            .sexp_type = SEXP_CONS,
-            .data_length = sizeof(struct sexp) * 2,
-        };
+        // user defined sexp
+        next_sexp += initialize_linear_sexp(type, next_sexp, NULL);
 
-        struct sexp *capacity_sexp = sexp + sizeof(struct sexp);
-        *capacity_sexp = (struct sexp) {
-            .is_linear = true,
-            .is_root = false,
-            .sexp_type = SEXP_INTEGER,
-            .data_length = sizeof(s32),
+        // list terminator
+        struct sexp *terminator = next_sexp;
+        next_sexp += initialize_linear_sexp(SEXP_LIST_TERMINATOR, next_sexp, NULL);
 
-            .data = *()
-        }
+        // set list terminator length
+        struct result_s32 r = set_terminator_size(sexp, terminator);
+        if (r.status == RESULT_ERROR)
+            return result_sexp_error(r.error);
+
+        // set the length in bytes of the root sexp data field.
+        sexp->data_length = (u8 *)sexp->data - (u8 *)next_sexp;
+
+        return result_sexp_ok(sexp);
     }
+
+    // TODO copy tree memory implementation method here.
 }

@@ -4,6 +4,7 @@
 #include "nonstdint.h"
 
 #include <stddef.h>
+#include <stdarg.h>
 
 // TODO create a global/thread-local error list that holds references to errors
 // until they are handled.  This will allow errors to be caught and logged when
@@ -35,7 +36,8 @@ const struct error_ops MSG_ERROR_OPS = {
     .free = free_msg_error,
 };
 
-struct error make_msg_error(const char *msg);
+struct error make_msg_error(const char *fmt, ...);
+struct error vmake_msg_error(const char *fmt, va_list args);
 
 /***************************** Result Object Type *****************************/
 
@@ -56,27 +58,6 @@ enum result_status {
     RESULT_ERROR,
 };
 
-#define DEFINE_RESULT_TYPE(type)                                               \
-  struct result_##type {                                                       \
-    enum result_status status;                                                 \
-    union {                                                                    \
-      struct error error;                                                      \
-      type ok;                                                                 \
-    };                                                                         \
-  };                                                                           \
-                                                                               \
-  type result_unwrap_##type(struct result_##type r) { return r.ok; }           \
-  struct result_##type result_##type##_ok(type t) {                            \
-    return (struct result_##type){.status = RESULT_OK, .ok = t};               \
-  }                                                                            \
-  struct result_##type resutl_##type##_error(struct error e) {                 \
-    return (struct result_##type){.status = RESULT_ERROR, .error = e};         \
-  }                                                                            \
-  struct result_##type resutl_##type##_msg_error(const char *str) {            \
-    return (struct result_##type){.status = RESULT_ERROR,                      \
-                                  .error = make_msg_error(str)};               \
-  }
-
 #define DEFINE_RESULT_TYPE_CUSTOM(type, name)                                  \
   struct result_##name {                                                       \
     enum result_status status;                                                 \
@@ -94,10 +75,14 @@ enum result_status {
   struct result_##name result_##name##_error(struct error e) {                 \
     return (struct result_##name){.status = RESULT_ERROR, .error = e};         \
   }                                                                            \
-  struct result_##name result_##name##_msg_error(const char *str) {            \
+  struct result_##name result_##name##_msg_error(const char *str, ...) {       \
+    va_list args;                                                              \
+    va_start(args, str);                                                       \
     return (struct result_##name){.status = RESULT_ERROR,                      \
-                                  .error = make_msg_error(str)};               \
+                                  .error = vmake_msg_error(str, args)};        \
   }
+
+#define DEFINE_RESULT_TYPE(type) DEFINE_RESULT_TYPE_CUSTOM(type, type)
 
 DEFINE_RESULT_TYPE(s8)
 DEFINE_RESULT_TYPE(s16)
@@ -113,10 +98,16 @@ DEFINE_RESULT_TYPE(f64)
 DEFINE_RESULT_TYPE_CUSTOM(char *, str)
 
 /****************************** Convience Macros ******************************/
-#define PROGAM_CONTEXT_STR                                                     \
-  "------------------------------\n"                                           \
-  "file: \"" __FILE__ "\"\n"                                                   \
-  "line: " __LINE__ "\n"                                                       \
-  "in " __func__ "\n"
+
+/** Generates a result type containing a message error that includes file/line
+    number context.
+
+    @return result type containing an error message with context that must be
+    freed
+*/
+#define RESULT_MSG_ERROR(name_or_type, msg)                                    \
+  result_##name_or_type##_msg_error(                                           \
+      "%s\n--------------------\nfile: %s\nline: %d\nfunc: %s\n", msg,         \
+      __FILE__, __LINE__, __func__)
 
 #endif
