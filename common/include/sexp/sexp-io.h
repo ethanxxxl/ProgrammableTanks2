@@ -23,7 +23,7 @@
     @return Tagged Union containing either an S-Expression or `error` Object.
 */
 struct result_sexp sexp_read(const char *sexp_str,
-                             enum sexp_reader_method method);
+                             enum sexp_memory_method method);
 
 /* TODO finish documenting this function*/
 /** Serialize the sexp and send it to the specified file. */

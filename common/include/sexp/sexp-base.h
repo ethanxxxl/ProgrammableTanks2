@@ -36,6 +36,7 @@ enum sexp_type {
     SEXP_TAG = 0x4,
 
     SEXP_LIST_TERMINATOR = 0x5,
+    SEXP_LINEAR_ROOT = 0x6,
 };
 
 /** Fundamental structure for both S-Expression implementations. */
@@ -43,12 +44,6 @@ struct cons {
     struct sexp *car;
     struct sexp *cdr;
 };
-
-// there is a problem here.  If you pass a linear sexp to a function, that
-// function can know if it is the root or not.  There is know way to find the
-// root if the function is operating on a child node.
-
-// 
 
 /** Universial S-Expression Structure
 
@@ -67,10 +62,28 @@ struct cons {
         
     Linear S-Expressions
     ============================================================================
-    When initialized, regardless of the desired sexp type, root node is always
-    of type `SEXP_CONS`.  At a high level, this means every linear sexp takes
-    the form `(CAPACITY SEXP)`. `CAPACITY` is a `SEXP_INTEGER` and indicates how
-    much space was allocated via `malloc()`.  `SEXP` may be any sexp type.
+    When initialized through `make_sexp()`, the caller will receive a handle to
+    an sexp.  If a function such as `sexp_append()` is called on a child sexp,
+    it could require that the sexp be realloc'ed.  The root sexp isn't passed
+    into any utility functions to maintain transparency between memory layouts.
+    This means that if a realloc occurs, the caller will have a bad handle to
+    the root sexp, causing a memory leak.
+
+    To solve this, a linear sexp performs two memory allocations.  The result of
+    the first is passed to the caller, and is never realloc'ed.  It contains the
+    result of the second allocation, which is the actual sexp handle.
+
+    The first node is special in linear S-Expressions.  Regardless of the
+    desired sexp type, the root node is always of type `SEXP_LINEAR_ROOT`.  the
+    corresponding union type contains the capacity of the allocated memory,
+    along with a pointer to the sexp that represents the data the user wants to
+    encode.
+
+    The sexp pointed to in root node is also special.  It is a list with the
+    form `(ROOT_HANDLE CAPACITY VALUE)`.  `ROOT_HANDLE` points back to the
+    root node, and is of type `SEXP_LINEAR_ROOT`.  `CAPACITY` contains the
+    capacity of the sexp, and is a `SEXP_INTEGER`.  Finally, `VALUE` is whatever
+    the desired sexp is.
 
     Lists in a linear sexp are terminated with a sexp with type
     `SEXP_LIST_TERMINATOR`.  This isn't a "real" sexp type, it is only used as
@@ -107,7 +120,7 @@ struct cons {
     `SEXP_CONS`.  When `sexp_type` is `SEXP_CONS`, `data` contains more sexp
     structures, one after another, each containing their own length.
 */
-struct sexp {
+struct sexp{
     u32 is_linear: 1;
     u32 is_root: 1;
     u32 sexp_type: 3;
@@ -116,11 +129,15 @@ struct sexp {
     u8 data[];
 };
 
+typedef struct sexp sexp;
+
 #define SEXP_MAX_LENGTH (0x7ffffff)
 
 union sexp_data {
     struct cons cons;
     s32 integer;
+    
+    struct sexp *linear_root;
 };
 
 /************************** ERRORS AND RETURN TYPES ***************************/
@@ -197,6 +214,6 @@ DEFINE_RESULT_TYPE_CUSTOM(struct sexp *, sexp)
     creates a new sexp type, using the indicated method.
 */
 struct result_sexp make_sexp(enum sexp_type type,
-                             enum sexp_memory_method method);
+                             enum sexp_memory_method method, void *data);
 
 #endif

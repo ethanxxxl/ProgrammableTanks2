@@ -29,10 +29,42 @@ u32 length(const struct sexp *sexp);
 size_t
 sexp_length(const struct sexp *sexp);
 
-const struct sexp *
-sexp_nth(const struct sexp* list, size_t n);
+struct sexp *sexp_nth(const struct sexp *list, size_t n);
 
-const struct sexp*
-sexp_find(const struct sexp* s, char* atom);
+/** Create a new integer S-Expression and put it at the end of list
+
+    @return pointer to newly created sexp at end of list or error.
+ */
+struct result_sexp sexp_push_integer(sexp *list, s32);
+
+/** Create a new string S-Expression and put it at the end of list
+
+    @return pointer to newly created sexp at end of list or error.
+*/
+struct result_sexp sexp_push_string(sexp *list, const char *str);
+
+/** Create a new symbol S-Expression and put it at the end of list
+
+    @return pointer to newly created sexp at end of list or error.
+*/
+struct result_sexp sexp_push_symbol(sexp *list, const char *str);
+
+/** Create an empty tag container and put it at the end of list
+
+    @return pointer to newly created sexp at end of list or error.
+ */
+struct result_sexp sexp_push_tag(sexp *list);
+
+/** Create a nil sexp (empty list) and put it at the end of the list
+
+    @return pointer to newly created sexp at end of list or error.
+ */
+struct result_sexp sexp_push_nil(sexp *list);
+
+const struct sexp *sexp_find(const struct sexp *s, char *atom);
+
+void sexp_set_integer(struct sexp *s, s32 i);
+void sexp_set_string(struct sexp *s, const char *str);
+void sexp_set_symbol(struct sexp *s, const char *sym);
 
 #endif
