@@ -25,37 +25,27 @@
 struct result_sexp sexp_read(const char *sexp_str,
                              enum sexp_memory_method method);
 
+/** Converts the S-Expression (sexp) to a string
+
+    WARNING, this result must be free'ed!
+
+    @return c-string contianing the sexp
+ */
+struct result_str sexp_serialize(const struct sexp *sexp);
+
+/** Converts the S-Expression (sexp) to a string encapsulated in a vector.
+
+    WARNING, this result must be free'ed!
+
+    @return c-string contianing the sexp
+ */
+struct result_vec sexp_serialize_vec(const struct sexp *sexp);
+
 /* TODO finish documenting this function*/
 /** Serialize the sexp and send it to the specified file. */
-s32 sexp_fprint(const struct sexp*, FILE*);
+struct result_s32 sexp_fprint(const struct sexp*, FILE*);
 
 /* TODO document this function*/
 s32 sexp_print(const struct sexp*);
-
-/** Serializes the S-Expression and returns a pointer to the resulting string.
-    WARNING: this value must be free'ed!
-
-    @param sexp The S-Expression to serialize.
-
-    @return pointer to serialized expression on heap.*/
-struct result_str sexp_serialize(const struct sexp *sexp);
-
-/* TODO document this function*/
-struct sexp_static*
-sexp_append(struct sexp_static* dst, const struct sexp_static* src);
-
-/* TODO document this function*/
-struct sexp_static*
-sexp_append_dat(struct sexp_static* dst, void* dat, size_t len, enum sexp_type type);
-
-/* TODO document this function*/
-struct sexp_dyn *sexp_dyn_read(char *str);
-
-/* TODO document this function*/
-struct sexp_dyn *sexp_to_dyn(const struct sexp_static *sexp);
-
-/* TODO document this function*/
-struct sexp_static *sexp_from_dyn(const struct sexp_dyn *sexp);
-
 
 #endif

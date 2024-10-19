@@ -1,6 +1,8 @@
 #ifndef VECTOR_H
 #define VECTOR_H
 
+#include "error.h"
+
 #include <stddef.h>
 
 /**
@@ -13,6 +15,8 @@
  */
 struct vector;
 typedef struct vector vector;
+
+DEFINE_RESULT_TYPE_CUSTOM(vector *, vec)
 
 /**
  * initialize a new vector.

@@ -1,10 +1,13 @@
 #include "sexp/sexp-io.h"
+#include "error.h"
 #include "sexp/sexp-base.h"
 #include "sexp/sexp-utils.h"
+#include "vector.h"
 
 #include <ctype.h>
 #include <string.h>
 #include <stdlib.h>
+
 
 /*************************** SEXP READER FUNCITONS ****************************/
 /** reads an attom from the string and returns a pointer to the sexp. */
@@ -354,293 +357,292 @@ sexp_read(const char *sexp_str, enum sexp_memory_method method) {
     return r;
 }
 
-////////////////////////////////////////////////////////////////////////////////
-// SEXP PRINTER FUNCTIONS //////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////
+/************************** SEXP SERIALIZE FUNCTIONS **************************/
 
-const sexp*
-sexp_tag_get_tag(const sexp *sexp) {
-    if (sexp == NULL || sexp->type != SEXP_TAG)
-        return NULL;
+struct result_s32 sexp_serialize_list(const sexp *, vector *);
+struct result_s32 sexp_serialize_symbol(const sexp *, vector *);
+struct result_s32 sexp_serialize_integer(const sexp *, vector *);
+struct result_s32 sexp_serialize_tag(const sexp *, vector *);
+struct result_s32 sexp_serialize_string(const sexp *, vector *);
 
-    return (struct sexp*)sexp->data;
-}
+/** takes a sexp and dynamic buffer. */
+struct result_s32
+sexp_serialize_any(const sexp *s, vector *buffer) {
+    if (s == NULL)
+        return RESULT_MSG_ERROR(s32, "unexpected NULL sexp");
 
-const sexp*
-sexp_tag_get_atom(const sexp *sexp) {
-    if (sexp == NULL || sexp->type != SEXP_TAG)
-        return NULL;
+    if (buffer == NULL)
+        return RESULT_MSG_ERROR(s32, "unexpected NULL buffer");
 
-    // ⬇~~~~~~~~~~~~~~
-    // TYPE-TAG LENGTH
-    //         TYPE-ATOM LENGTH CONTENTS
-    //      -> TYPE-ATOM LENGTH CONTENTS
-    const struct sexp* tag = sexp_tag_get_tag(sexp);
-    return (struct sexp*)(tag->data + tag->length);
-}
-
-s32
-sexp_string_fprint(const sexp *sexp, FILE *f) {
-    if (sexp == NULL || sexp->type != SEXP_STRING)
-        return -1;
-
-    fprintf(f, "\"%.*s\"", sexp->length, sexp->data);
-    return 0;
-}
-
-s32
-sexp_integer_fprint(const sexp *sexp, FILE *f) {
-    if (sexp == NULL || sexp->type != SEXP_INTEGER)
-        return -1;
-
-    fprintf(f, "%d", *(u32*)sexp->data);
-    return 0;
-}
-
-s32
-sexp_symbol_fprint(const sexp *sexp, FILE *f) {
-    if (sexp == NULL || sexp->type != SEXP_SYMBOL)
-        return -1;
-
-    enum print_type {
-        PRINT_NORMAL,
-        PRINT_SPECIAL,
-        PRINT_NETSTRING,
-    } print_type = PRINT_NORMAL;
-
-    for (const u8* c = sexp->data;  c < sexp->data + sexp->length; c++) {
-        if (isspace(*c) || islower(*c)) {
-            print_type = PRINT_SPECIAL;
-            break;
-        }
-
-        if (*c == '|') {
-            print_type = PRINT_NETSTRING;
-            break;
-        }
-    }
-
-    switch (print_type) {
-    case PRINT_NORMAL:
-        fprintf(f, "%.*s", sexp->length, sexp->data);
+    struct result_s32 r;
+    switch (s->sexp_type) {
+    case SEXP_CONS:
+        r = sexp_serialize_list(s, buffer);
         break;
-    case PRINT_SPECIAL:
-        fprintf(f, "|%.*s|", sexp->length, sexp->data);
-        break;
-    case PRINT_NETSTRING:
-        fprintf(f, "%d:%.*s", sexp->length, sexp->length, sexp->data);
-        break;
-    }
-
-    return 0;
-}
-
-s32
-sexp_tagged_atom_fprint(const sexp *sexp, FILE *f) {
-    if (sexp == NULL || sexp->type != SEXP_TAG)
-        return -1;
-
-    s32 ret;
-
-    fputc('[', f);
-    const struct sexp* tag = sexp_tag_get_tag(sexp);
-    ret = sexp_symbol_fprint(tag, f);
-    if (ret == -1)
-        return ret;
-    
-    fputc(']', f);
-
-    const struct sexp* atom = sexp_tag_get_atom(sexp);
-    ret = sexp_symbol_fprint(atom, f);
-    if (ret == -1)
-        return ret;
-
-    return 0;
-}
-
-s32
-sexp_fprinter(const sexp*, FILE*);
-
-s32
-sexp_list_fprint(const sexp *sexp, FILE *f) {
-    if (sexp == NULL || sexp->type != SEXP_CONS)
-        return -1;
-    if (sexp->length == 0) {
-        fprintf(f, "()");
-        return 0;
-    }
-        
-    fprintf(f, "(");
-    
-    size_t n = 0;
-    const struct sexp* element = sexp_nth(sexp, 0);
-    while (true) {
-        if (sexp_fprinter(element, f) == -1)
-            return -1;
-
-        element = sexp_nth(sexp, ++n);
-        if (element == NULL)
-            break;
-
-        fputc(' ', f);
-    }
-
-    fputc(')', f);
-    return 0;
-}
-
-s32
-sexp_fprinter(const sexp *sexp, FILE *f) {
-    if (sexp == NULL)
-        return -1;
-    
-    s32 ret;
-    switch (sexp->type) {
     case SEXP_SYMBOL:
-        ret = sexp_symbol_fprint(sexp, f);
+        r = sexp_serialize_symbol(s, buffer);
         break;
     case SEXP_INTEGER:
-        ret = sexp_integer_fprint(sexp, f);
+        r = sexp_serialize_integer(s, buffer);
+        break;
+    case SEXP_TAG:
+        r = sexp_serialize_tag(s, buffer);
         break;
     case SEXP_STRING:
-        ret = sexp_string_fprint(sexp, f);
-        break;
-    case SEXP_TAG: 
-        ret = sexp_tagged_atom_fprint(sexp, f);
-        break;
-    case SEXP_CONS:
-        ret = sexp_list_fprint(sexp, f);
+        r = sexp_serialize_string(s, buffer);
         break;
     }
 
-    return ret;
+    return r;
 }
 
-s32
-sexp_fprint(const sexp *sexp, FILE *f) {
-    s32 ret = sexp_fprinter(sexp, f);
-    fputc('\n', f);
-    return ret;
-}
+struct result_s32
+sexp_serialize_symbol(const sexp *sexp, vector *buffer) {
+    if (sexp == NULL)
+        return RESULT_MSG_ERROR(s32, "unexpected NULL sexp");
 
+    if (buffer == NULL)
+        return RESULT_MSG_ERROR(s32, "unexpected NULL buffer");
 
-s32
-sexp_print(const sexp *sexp) {
-    return sexp_fprint(sexp, stdout);
-}
+    if (sexp->sexp_type != SEXP_SYMBOL)
+        return RESULT_MSG_ERROR(s32, "sexp type is not SEXP_SYMBOL");
 
+    s32 buffer_space = vec_cap(buffer) - vec_len(buffer);
+    s32 bytes_written = 0;
 
-s32
-sexp_serialize_symbol(const sexp *sexp, char *buffer, size_t size) {
-    if (sexp == NULL || sexp->type != SEXP_SYMBOL)
-        return -1;
+    do {
+        bytes_written = snprintf(vec_end(buffer),
+                                 buffer_space,
+                                 "%.*s",
+                                 sexp->data_length,
+                                 sexp->data);
 
-    return snprintf(buffer, size, "%.*s", sexp->length, sexp->data);
-}
-
-s32
-sexp_serialize_tag(const sexp *sexp, char *buffer, size_t size) {
-    if (sexp == NULL || sexp->type != SEXP_TAG)
-        return -1;
-
-    const struct sexp* tag = sexp_tag_get_tag(sexp);
-    const struct sexp* atom = sexp_tag_get_atom(sexp);
-    
-    return snprintf(buffer, size, "[%.*s]%.*s",
-                    tag->length, tag->data,
-                    atom->length, atom->data);
-}
-    
-s32
-sexp_serialize_string(const sexp *sexp, char *buffer, size_t size) {
-    if (sexp == NULL || sexp->type != SEXP_STRING)
-        return -1;
-
-    return snprintf(buffer, size, "\"%s\"", (char*)sexp->data);
-}
-
-s32
-sexp_serialize_integer(const sexp *sexp, char *buffer, size_t size) {
-    if (sexp == NULL || sexp->type != SEXP_INTEGER)
-        return -1;
-
-    return snprintf(buffer, size, "%d", *(u32*)sexp->data);
-}
-
-struct result_str
-sexp_serialize_list(const sexp *sexp, char *buffer, size_t size) {
-    if (buffer == NULL && size != 0)
-        return make_generic_error("this is an error");
-    
-    if (sexp == NULL || sexp->type != SEXP_CONS)
-        return make_generic_error("another error");
-    
-    if (sexp->length < sizeof(struct sexp))
-        return snprintf(buffer, size, "()");
-
-    size_t list_len = 1;
-    snprintf(buffer, size, "(");
-    
-    struct sexp* element = (struct sexp*)sexp->data;
-    while (element < (struct sexp*)(sexp->data + sexp->length)) {
-        size_t tmp = 0;
-
-        // case that nothing is written to buffer.
-        if (size == 0  && buffer == NULL)
-            tmp = sexp_serialize(element, NULL, 0);
-        else if (list_len < size) 
-            // don't write anything if there isn't enough space left in the buffer.
-            tmp = sexp_serialize(element, buffer + list_len, size-list_len);
-        else
-            return list_len;
-
-        if (tmp < 0)
-            return -1;
-
-        list_len += tmp;
-
-        element = (struct sexp*)(element->data + element->length);
-
-        if (element < (struct sexp*)(sexp->data + sexp->length)) {
-            if (size != 0  && buffer != NULL && list_len < size)
-                snprintf(buffer+list_len, size-list_len, " ");
-            
-            list_len++;
+        if (bytes_written > buffer_space) {
+            s32 r = vec_reserve(buffer, vec_len(buffer) + bytes_written + 1);
+            if (r == -1)
+                return RESULT_MSG_ERROR(s32, "vector resize failed");
+            continue;
         }
+
+        vec_resize(buffer, vec_len(buffer) + bytes_written);
+        break;
+        
+    } while (true);
+
+    return result_s32_ok(bytes_written);
+}
+
+struct result_s32
+sexp_serialize_tag(const sexp *sexp, vector *buffer) {
+    if (sexp == NULL)
+        return RESULT_MSG_ERROR(s32, "unexpected NULL sexp");
+
+    if (buffer == NULL)
+        return RESULT_MSG_ERROR(s32, "unexpected NULL buffer");
+
+    if (sexp->sexp_type != SEXP_TAG)
+        return RESULT_MSG_ERROR(s32, "sexp type is not SEXP_TAG");
+
+    struct result_sexp r;
+    const struct sexp* tag;
+    const struct sexp* atom;
+
+    // get tag
+    r = sexp_tag_get_tag(sexp);
+    if (r.status == RESULT_ERROR)
+        return result_s32_error(r.error);
+    tag = r.ok;
+
+    // get atom
+    r = sexp_tag_get_atom(sexp);
+    if (r.status == RESULT_ERROR)
+        return result_s32_error(r.error);
+    atom = r.ok;
+
+    size_t buffer_space = vec_cap(buffer) - vec_len(buffer);
+    size_t bytes_written = 0;
+
+    do {
+        bytes_written = snprintf(vec_end(buffer),
+                                 buffer_space,
+                                 "[%.*s]%.*s",
+                                 tag->data_length, tag->data,
+                                 atom->data_length, atom->data);
+
+        if (bytes_written > buffer_space) {
+            s32 r = vec_reserve(buffer, vec_len(buffer) + bytes_written);
+            if (r == -1)
+                return RESULT_MSG_ERROR(s32, "vector capacity increase failed");
+
+            continue;
+        }
+
+        vec_resize(buffer, vec_len(buffer) + bytes_written);
+        break;
+    } while (true);
+    
+    return result_s32_ok(bytes_written);
+}
+    
+struct result_s32
+sexp_serialize_string(const sexp *sexp, vector *buffer) {
+    if (sexp == NULL)
+        return RESULT_MSG_ERROR(s32, "unexpected NULL sexp");
+
+    if (buffer == NULL)
+        return RESULT_MSG_ERROR(s32, "unexpected NULL buffer");
+
+    if (sexp->sexp_type != SEXP_STRING)
+        return RESULT_MSG_ERROR(s32, "sexp type is not SEXP_STRING");
+
+    s32 buffer_space = vec_cap(buffer) - vec_len(buffer);
+    s32 bytes_written = 0;
+
+    do {
+        bytes_written = snprintf(vec_end(buffer),
+                                 buffer_space,
+                                 "\"%s\"", (char*)sexp->data);
+
+        if (bytes_written > buffer_space) {
+            s32 r = vec_reserve(buffer, vec_len(buffer) + bytes_written + 1);
+            if (r == -1)
+                return RESULT_MSG_ERROR(s32, "vector resize failed");
+
+            continue;
+        }
+
+        vec_resize(buffer, vec_len(buffer) + bytes_written);
+        break;
+    } while(true);
+
+    return result_s32_ok(bytes_written);
+}
+
+struct result_s32
+sexp_serialize_integer(const sexp *sexp, vector *buffer) {
+    if (sexp == NULL)
+        return RESULT_MSG_ERROR(s32, "unexpected NULL sexp");
+
+    if (buffer == NULL)
+        return RESULT_MSG_ERROR(s32, "unexpected NULL buffer");
+
+    if (sexp->sexp_type != SEXP_INTEGER)
+        return RESULT_MSG_ERROR(s32, "sexp type is not SEXP_INTEGER");
+
+    s32 buffer_space = vec_cap(buffer) - vec_len(buffer);
+    s32 bytes_written = 0;
+
+    do {
+        bytes_written = snprintf(vec_end(buffer),
+                                 buffer_space,
+                                 "%d", *(u32*)sexp->data);
+
+        if (bytes_written > buffer_space) {
+            s32 r = vec_reserve(buffer, vec_len(buffer) + bytes_written);
+            if (r == -1)
+                return RESULT_MSG_ERROR(s32, "vec reserve failed");
+
+            continue;
+        }
+
+        vec_resize(buffer, vec_len(buffer) + bytes_written);
+        break;
+    } while (true);
+
+    return result_s32_ok(bytes_written);
+}
+
+struct result_s32
+sexp_serialize_list(const sexp *list, vector *buffer) {
+    if (buffer == NULL)
+        return RESULT_MSG_ERROR(s32, "unexpected NULL buffer");
+
+    if (list == NULL)
+        return RESULT_MSG_ERROR(s32, "unexpected NULL sexp");
+    
+    if (list->sexp_type != SEXP_CONS)
+        return RESULT_MSG_ERROR(s32, "expected sexp of type SEXP_CONS");
+
+    size_t start_length = vec_len(buffer);
+
+    sexp *element = sexp_nth(list, 0);
+
+    vec_push(buffer, "(");
+    
+    struct result_s32 r;
+    bool is_nil = true;
+    while (sexp_is_nil(element) == false) {
+        // put the serialized element on the end of the buffer
+        r = sexp_serialize_any(element, buffer);
+        if (r.status == RESULT_ERROR)
+            return r;
+
+        // Add space between sexp elements
+        vec_push(buffer, " ");
+
+        element = sexp_cdr(element);
+        is_nil = false;
     }
 
-    if  (list_len < size)
-        snprintf(buffer+list_len, size-list_len, ")");
+    // remove the last space appended to the buffer.  No space is added when
+    // there are no elements.
+    if (is_nil == false)
+        vec_pop(buffer, NULL);
+
+    vec_push(buffer, ")");
     
-    list_len += 1;
-        
-    return list_len;
+    return result_s32_ok(vec_len(buffer) - start_length);
 }
 
-char *_sexp_serialize(const sexp *sexp, char *buffer, size_t len, size_t cap) {
+struct result_vec sexp_serialize_vec(const sexp *sexp) {
+    // this is currently just a guess at how much capacity would be needed.
+    struct vector *buffer = make_vector(sizeof(char), 30);
     
-}
+    if (buffer == NULL)
+        return RESULT_MSG_ERROR(vec, "make_vector returned zero");
+    
+    struct result_s32 r;
+    r = sexp_serialize_any(sexp, buffer);
 
+    if (r.status == RESULT_ERROR)
+        return result_vec_error(r.error);
+
+    return result_vec_ok(buffer);
+}
 
 struct result_str sexp_serialize(const sexp *sexp) {
-    // this function should return the number of bytes written to the buffer.
-    // If buffer is NULL, then no bytes are written.  If buffer is NULL and size
-    // is 0, no bytes are written, but the function will return the number of
-    // bytes that would have been written if the buffer existed.
-    
-    if (sexp == NULL)
-        return -1;
+    struct result_vec r = sexp_serialize_vec(sexp);
 
-    switch (sexp->type) {
-    case SEXP_CONS:
-        return sexp_serialize_list(sexp, buffer, size);
-    case SEXP_SYMBOL:
-        return sexp_serialize_symbol(sexp, buffer, size);
-    case SEXP_INTEGER:
-        return sexp_serialize_integer(sexp, buffer, size);
-    case SEXP_TAG:
-        return sexp_serialize_tag(sexp, buffer, size);
-    case SEXP_STRING:
-        return sexp_serialize_string(sexp, buffer, size);
-    }
+    if (r.status == RESULT_ERROR)
+        return result_str_error(r.error);
+
+    // since the implementation vectors is hidden, we don't have a handle to all
+    // the data allocated by vec.  We must copy the data over to a new region so
+    // that the pointer we return can be free'ed directly.
+
+    vector *v = r.ok;
+
+    char *s = malloc(vec_len(v) * sizeof(char));
+    if (s == NULL)
+        return RESULT_MSG_ERROR(str, "malloc returned null");
+
+    memcpy(s, vec_dat(v), vec_len(v));
+    free_vector(v);
+
+    return result_str_ok(s);
+}
+
+/************************ AUXILLIARY PRINTER FUNCTIONS ************************/
+struct result_s32 sexp_fprint(const struct sexp *s, FILE *file){
+    struct result_vec r = sexp_serialize_vec(s);
+    if (r.status == RESULT_ERROR)
+        return result_s32_error(r.error);
+
+    vector *v = r.ok;
+    const char *str = vec_dat(v);
+
+    fwrite(str, vec_element_len(v), vec_len(v), file);
+    free_vector(r.ok);
+
+    return result_s32_ok(0);
 }

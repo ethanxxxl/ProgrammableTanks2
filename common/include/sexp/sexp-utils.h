@@ -11,19 +11,18 @@
 
 struct sexp *list(struct sexp *sexp[]);
 
-void setcar(struct sexp *dst, struct sexp *car);
-void setcdr(struct sexp *dst, struct sexp *cdr);
-struct sexp *car(const struct sexp *sexp);
-struct sexp *cdr(const struct sexp *sexp);
+void sexp_setcar(struct sexp *dst, struct sexp *car);
+void sexp_setcdr(struct sexp *dst, struct sexp *cdr);
+struct sexp *sexp_car(const struct sexp *sexp);
+struct sexp *sexp_cdr(const struct sexp *sexp);
 
 /** Add item to the end of the list. */
-void append(struct sexp *list, struct sexp *item);
+void sexp_append(struct sexp *list, struct sexp *item);
 
 /** Return the nth element (car) of the list. */
 struct sexp *nth(const struct sexp *sexp, u32 n);
 
-bool is_nil(const struct sexp *sexp);
-u32 length(const struct sexp *sexp);
+bool sexp_is_nil(const struct sexp *sexp);
 
 /* returns the number of elements in the sexp list. */
 size_t
@@ -66,5 +65,8 @@ const struct sexp *sexp_find(const struct sexp *s, char *atom);
 void sexp_set_integer(struct sexp *s, s32 i);
 void sexp_set_string(struct sexp *s, const char *str);
 void sexp_set_symbol(struct sexp *s, const char *sym);
+
+struct result_sexp sexp_tag_get_tag(const sexp *s);
+struct result_sexp sexp_tag_get_atom(const sexp *s);
 
 #endif
