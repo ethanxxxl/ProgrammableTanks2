@@ -38,6 +38,10 @@ const struct error_ops MSG_ERROR_OPS = {
 
 struct error make_msg_error(const char *fmt, ...);
 struct error vmake_msg_error(const char *fmt, va_list args);
+struct error make_msg_error_with_location(const char *file,
+                                          s32 line_num,
+                                          const char *fn_name,
+                                          const char *fmt, ...);
 
 /***************************** Result Object Type *****************************/
 
@@ -99,15 +103,25 @@ DEFINE_RESULT_TYPE_CUSTOM(char *, str)
 
 /****************************** Convience Macros ******************************/
 
+/** Wrapper that automatically inserts location information at call site. */
+#define MAKE_MSG_ERROR_WITH_LOCATION(...) \
+    make_msg_error_with_location(__FILE__, __LINE__, __func__, __VA_ARGS__)
+
 /** Generates a result type containing a message error that includes file/line
     number context.
 
     @return result type containing an error message with context that must be
     freed
 */
-#define RESULT_MSG_ERROR(name_or_type, msg)                                    \
-  result_##name_or_type##_msg_error(                                           \
-      "%s\n--------------------\nfile: %s\nline: %d\nfunc: %s\n", msg,         \
-      __FILE__, __LINE__, __func__)
+#define RESULT_MSG_ERROR(name_or_type, ...) \
+    result_##name_or_type##_error(MAKE_MSG_ERROR_WITH_LOCATION(__VA_ARGS__))
 
+
+/** Reduces boilerplate and temp variables when a function will not handle any
+    error conditions. */
+#define RETURN_ERROR(name_or_type, result, ...)         \
+    { struct result_##name_or_type r = __VA_ARGS__;     \
+        if (r.status == RESULT_ERROR) return r;         \
+        result = r.ok;                                  \
+    }
 #endif

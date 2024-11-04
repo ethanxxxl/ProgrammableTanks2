@@ -1,6 +1,9 @@
 #include "command-line.h"
+#include "error.h"
 #include "scenario.h"
 #include "message.h"
+#include "sexp/sexp-base.h"
+#include "sexp/sexp-utils.h"
 #include "vector.h"
 #include "nonstdint.h"
 #include "sexp.h"
@@ -26,39 +29,57 @@ void print_hex(const void *data, size_t len) {
     printf("\n");
 }
 
-struct sexp_dyn *coords_vec_to_sexp(struct vector *coords) {
-    struct sexp_dyn *root = make_cons(NULL, NULL);
-    struct sexp_dyn *end = root;
+struct result_sexp coords_vec_to_sexp(struct vector *coords) {
+    struct result_sexp r;
+    r = make_sexp(SEXP_CONS, SEXP_MEMORY_TREE, NULL);
+    if (r.status == RESULT_ERROR)
+        return r;
+
+    struct sexp *root = r.ok;
 
     for (u32 i = 0; i < vec_len(coords); i++) {
         struct coord *c = vec_ref(coords, i);
-
-        append(end, make_integer(c->x));
-        end = cdr(end);
-
-        append(end, make_integer(c->y));
-        end = cdr(end);
+        
+        sexp_push_integer(root, c->x);
+        sexp_push_integer(root, c->x);
     }
 
-    return root;
+    return result_sexp_ok(root);
 }
 
-struct vector *coords_sexp_to_vector(struct sexp_dyn *coords) {
+struct result_vec coords_sexp_to_vector(struct sexp *coords) {
     struct vector *vec = make_vector(sizeof(struct coord), 32);
 
-    while (!is_nil(cdr(coords))) {
+    struct result_sexp r;
+    while (!sexp_is_nil(coords)) {
         struct coord coordinate;
-        if (car(coords)->type != SEXP_INTEGER) {
-            // TODO ERROR CONDITION
-        }
-        coordinate.x = car(coords)->integer;
-        coords = cdr(coords);
         
-        if (car(coords)->type != SEXP_INTEGER) {
-            // TODO ERROR CONDITION
-        }
-        coordinate.y = car(coords)->integer;
-        coords = cdr(coords);
+        r = sexp_car(coords);
+        if (r.status == RESULT_ERROR) return result_vec_error(r.error);
+        sexp *car = r.ok;
+
+        struct result_s32 int_r;
+        
+        int_r = sexp_int_val(car);
+        if (int_r.status == RESULT_ERROR) return result_vec_error(int_r.error);
+        
+        coordinate.x = int_r.ok;
+
+        r = sexp_cdr(coords);
+        if (r.status == RESULT_ERROR) return result_vec_error(r.error);
+        coords = r.ok;
+
+        r = sexp_car(coords);
+        if (r.status == RESULT_ERROR) return result_vec_error(r.error);
+        car = r.ok;
+
+        int_r = sexp_int_val(car);
+        if (int_r.status == RESULT_ERROR) return result_vec_error(int_r.error);
+        coordinate.y = int_r.ok;
+
+        r = sexp_cdr(coords);
+        if (r.status == RESULT_ERROR) return result_vec_error(r.error);
+        coords = r.ok;
 
         vec_push(vec, &coordinate);
     }
@@ -76,7 +97,7 @@ void message_send(int fd, const struct sexp_dyn *msg) {
     return;
 }
 
-struct sexp_dyn *message_recv(int fd, struct vector* buf) {
+struct result_sexp message_recv(int fd, struct vector* buf) {
     size_t space_available = vec_cap(buf) - vec_len(buf);
     
     if (space_available < 50) {
@@ -127,7 +148,7 @@ struct sexp_dyn *message_recv(int fd, struct vector* buf) {
 
 
 /*************************** Text Message Functions ***************************/
-struct sexp_dyn *make_text_message(const char *message) {
+struct result_sexp make_text_message(const char *message) {
     return list((struct sexp_dyn*[]){
             MAKE_HEADER(MSG_REQUEST_DEBUG),
             make_string(message)}
@@ -143,7 +164,7 @@ const char *unwrap_text_message(const struct sexp_dyn *msg) {
 
 
 /************************** Status Message Functions **************************/
-struct sexp_dyn *make_status_message(enum message_status status) {
+struct result_sexp make_status_message(enum message_status status) {
     return list((struct sexp_dyn*[]){
                 MAKE_HEADER(MSG_RESPONSE_STATUS),
                 make_integer(status)}
@@ -159,7 +180,7 @@ enum message_status unwrap_status_message(const struct sexp_dyn *msg) {
 }
 
 /********************* User Credentials Message Functions *********************/
-struct sexp_dyn *
+struct result_sexp
 make_user_credentials_message(const struct user_credentials *creds) {
     return list((struct sexp_dyn*[]){
             MAKE_HEADER(MSG_REQUEST_AUTHENTICATE),
@@ -189,8 +210,7 @@ unwrap_user_credentials_message(const struct sexp_dyn *msg) {
 }
 
 /********************** Player Update Message Functions ***********************/
-
-struct sexp_dyn *
+struct result_sexp
 make_player_update_message(const struct player_update *player_update) {
 
     return list((struct sexp_dyn*[]){
@@ -229,10 +249,9 @@ struct player_update unwrap_player_update_message(const struct sexp_dyn *msg) {
                  ...)
  */
  
-struct sexp_dyn *make_scenario_tick_message(const struct scenario_tick *tick) {
-    struct sexp_dyn *msg_root = make_cons(NULL, NULL);
-    struct sexp_dyn *msg = msg_root;
-
+struct result_sexp make_scenario_tick_message(const struct scenario_tick *tick) {
+    struct sexp *msg_root = make_cons(NULL, NULL);
+    struct sexp *msg = msg_root;
 
     for (u32 p = 0; p < vec_len(tick->players_public_data); p++ ) {
         struct player_public_data *data = vec_ref(tick->players_public_data, p);

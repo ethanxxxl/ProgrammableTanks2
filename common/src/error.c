@@ -53,3 +53,25 @@ struct error vmake_msg_error(const char *fmt, va_list args) {
         .self = message,
     };    
 }
+
+struct error make_msg_error_with_location(const char *file,
+                                          s32 line_num,
+                                          const char *fn_name,
+                                          const char *fmt, ...) {
+    va_list args;
+    va_start(args, fmt);
+    
+    char *message;
+    vasprintf(&message, fmt, args); // calls malloc, will be free'ed at end.
+
+    if (message == NULL) {
+        message =
+            "ERROR: malloc returned NULL while trying toreturn an error!";
+    }
+
+    return make_msg_error("%s\nfile: %s\nline: %d\nfunc: %s\n",
+                          message,
+                          file,
+                          line_num,
+                          fn_name);
+}
