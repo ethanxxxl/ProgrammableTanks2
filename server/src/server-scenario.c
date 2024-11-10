@@ -205,22 +205,25 @@ int scenario_handler(struct scenario *scene) {
 
     // send updates to all the players
     // create message to send to players
-    struct message msg;
-    make_message(&msg, MSG_RESPONSE_SCENARIO_TICK);
+    struct result_sexp r = make_message(MSG_RESPONSE_SCENARIO_TICK);
+
+    if (r.status == RESULT_ERROR) {
+        // TODO handle this errror
+        printf("%s", describe_error(r.error));
+        free_error(r.error);
+        return -1;
+    }
+    sexp *msg = r.ok;
 
     // add public data to the message
     for (size_t p = 0; p < vec_len(scene->players); p++) {
-        struct player_data* player = vec_ref(scene->players, p);
-        struct vector* players_public = msg.scenario_tick.players_public_data;
-        
-        struct player_public_data pub_dat = player_public_data_get(player);
-        vec_push(players_public, &pub_dat);
+        const struct player_data* player = vec_ref(scene->players, p);
+        message_scenario_tick_add_player(&msg, player);
     }
 
     // send the newly created message.        
     for (size_t a = 0; a < vec_len(scene->players); a++) {
         struct player_manager* pm = vec_ref(scene->player_managers, a);
-        
 
         #ifdef DEBUG
         struct sockaddr_in player_a = *(struct sockaddr_in *)(&actor.player->address);
@@ -232,7 +235,7 @@ int scenario_handler(struct scenario *scene) {
         message_send(pm->socket, msg);
     }
 
-    free_message(msg);
+    free_sexp(msg);
     
     return 0;
 }

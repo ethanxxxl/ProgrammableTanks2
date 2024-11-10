@@ -109,18 +109,17 @@ void *accept_connections_thread(void* port_num) {
 /// clients, and passes them to the appropriate handler (depends on the state of
 /// the client)
 void handle_client(struct player_manager* p, struct vector* msg_buf) {
-    struct message msg;
-    int status = message_recv(p->socket, &msg, msg_buf);
-    
-    // return if nothing was read.
-    if (status == -1) {
-        return;
+    struct result_sexp r = message_recv(p->socket, msg_buf);
+    if (r.status == RESULT_ERROR) {
+        // TODO handle this error!
     }
+    
+    sexp *msg = r.ok;
     
     print_player(p);
     printf("--RECEIVED--\n");
     // XXX: debug message.
-    print_message(msg);
+    sexp_print(msg);
     
     switch (p->state) {
     case STATE_DISCONNECTED:
@@ -135,16 +134,18 @@ void handle_client(struct player_manager* p, struct vector* msg_buf) {
         player_scenario_handler(p, msg);
         break;
     }
-    
-    if (msg.type == MSG_REQUEST_DEBUG) {
-        printf("%s: %s\n", p->username, (char*)vec_dat(msg.text));
+
+    enum message_type msg_type = message_get_type(msg);
+    if (msg_type == MSG_REQUEST_DEBUG) {
+        const char *msg_text = unwrap_text_message(msg);
+        printf("%s: %s\n", p->username, msg_text);
         
-        if (strcmp((char*)vec_dat(msg.text), "kill-serv") == 0) {
+        if (strcmp(msg_text, "kill-serv") == 0) {
             g_run_server = false;
         }
     }
 
-    free_message(msg);
+    free_sexp(msg);
     return;
 }
 

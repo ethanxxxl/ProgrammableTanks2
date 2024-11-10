@@ -156,9 +156,6 @@ union sexp_data {
          RESULT(SEXP_RESULT_TRAILING_GARBAGE)                \
          RESULT(SEXP_RESULT_NULL_SEXP_PARAMETER)             \
  
-#define GENERATE_ENUM(ENUM) ENUM,
-#define GENERATE_STRING(STRING) #STRING,
-
 enum sexp_reader_error_code {
     FOR_EACH_RESULT_TYPE(GENERATE_ENUM)
 };
@@ -215,5 +212,11 @@ DEFINE_RESULT_TYPE_CUSTOM(struct sexp *, sexp)
 */
 struct result_sexp make_sexp(enum sexp_type type,
                              enum sexp_memory_method method, void *data);
+
+struct result_sexp make_integer_sexp(s32 num);
+struct result_sexp make_string_sexp(const char *str);
+struct result_sexp make_symbol_sexp(const char *sym);
+struct result_sexp make_cons_sexp();
+void free_sexp(sexp *s);
 
 #endif

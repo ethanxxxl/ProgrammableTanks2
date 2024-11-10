@@ -100,6 +100,10 @@ DEFINE_RESULT_TYPE(f32)
 DEFINE_RESULT_TYPE(f64)
 
 DEFINE_RESULT_TYPE_CUSTOM(char *, str)
+DEFINE_RESULT_TYPE_CUSTOM(void *, voidp)
+
+// this is meant to be used when a function optionally returns an error.
+DEFINE_RESULT_TYPE_CUSTOM(u8, void)
 
 /****************************** Convience Macros ******************************/
 
@@ -119,9 +123,13 @@ DEFINE_RESULT_TYPE_CUSTOM(char *, str)
 
 /** Reduces boilerplate and temp variables when a function will not handle any
     error conditions. */
-#define RETURN_ERROR(name_or_type, result, ...)         \
-    { struct result_##name_or_type r = __VA_ARGS__;     \
-        if (r.status == RESULT_ERROR) return r;         \
-        result = r.ok;                                  \
-    }
+#define RESULT_UNWRAP(ret_type, var, ...)                                      \
+  {                                                                            \
+    auto _r = __VA_ARGS__;                                                     \
+    if (_r.status == RESULT_ERROR)                                             \
+      return result_##ret_type##_error(_r.error);                              \
+    else                                                                       \
+      var = _r.ok;                                                             \
+  }
+
 #endif

@@ -37,15 +37,14 @@ struct player_manager {
     struct ringbuffer to_scenario;
 };
 
-int make_player_manager(struct player_manager *p);
+struct result_void make_player_manager(struct player_manager *p);
 void print_player(struct player_manager *p);
 
 // recieves player messages from the network, sends them to the
 // scenario
-int player_handle_messages(struct player_manager *p);
-
-int player_idle_handler(struct player_manager *p, struct message msg);
-int player_lobby_handler(struct player_manager *p, struct message msg);
-int player_scenario_handler(struct player_manager *p, struct message msg);
+struct result_void player_handle_messages(struct player_manager *p);
+struct result_void player_idle_handler(struct player_manager *p, sexp *msg);
+struct result_void player_lobby_handler(struct player_manager *p, sexp *msg);
+struct result_void player_scenario_handler(struct player_manager *p, sexp *msg);
 
 #endif

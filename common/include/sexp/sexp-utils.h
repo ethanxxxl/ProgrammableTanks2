@@ -8,8 +8,13 @@
 
 ///////////////////////////////// Manipulators /////////////////////////////////
 
+/** Returns a list created by the sexps specified as arguments.
 
-struct sexp *list(struct sexp *sexp[]);
+ For convienience, the sexps are wrapped in the result types, functions that
+ return result_sexp types can be used directly.  If an error is passed into the
+ function, that error will be returned.
+*/
+struct result_sexp sexp_list(struct result_sexp sexp, ...);
 
 void sexp_setcar(struct sexp *dst, struct sexp *car);
 void sexp_setcdr(struct sexp *dst, struct sexp *cdr);

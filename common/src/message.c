@@ -58,42 +58,31 @@ struct result_vec coords_sexp_to_vector(struct sexp *coords) {
         if (r.status == RESULT_ERROR) return result_vec_error(r.error);
         sexp *car = r.ok;
 
-        struct result_s32 int_r;
-        
-        int_r = sexp_int_val(car);
-        if (int_r.status == RESULT_ERROR) return result_vec_error(int_r.error);
-        
-        coordinate.x = int_r.ok;
+        // (X Y X Y X Y)
+        //  ^
+        RESULT_UNWRAP(vec, coordinate.x, sexp_int_val(car));
 
-        r = sexp_cdr(coords);
-        if (r.status == RESULT_ERROR) return result_vec_error(r.error);
-        coords = r.ok;
+        RESULT_UNWRAP(vec, coords, sexp_cdr(coords));
 
-        r = sexp_car(coords);
-        if (r.status == RESULT_ERROR) return result_vec_error(r.error);
-        car = r.ok;
+        RESULT_UNWRAP(vec, car, sexp_car(coords));
 
-        int_r = sexp_int_val(car);
-        if (int_r.status == RESULT_ERROR) return result_vec_error(int_r.error);
-        coordinate.y = int_r.ok;
+        // (X Y X Y X Y)
+        //    ^
+        RESULT_UNWRAP(vec, coordinate.y, sexp_int_val(car));
 
-        r = sexp_cdr(coords);
-        if (r.status == RESULT_ERROR) return result_vec_error(r.error);
-        coords = r.ok;
+        RESULT_UNWRAP(vec, coords, sexp_cdr(coords));
 
         vec_push(vec, &coordinate);
     }
 
-    return vec;
+    return result_vec_ok(vec);
 }
 
 
-void message_send(int fd, const struct sexp_dyn *msg) {
+void message_send(int fd, const struct sexp *msg) {
     (void)fd;
     (void)msg;
 
-    
-        
     return;
 }
 
@@ -125,34 +114,34 @@ struct result_sexp message_recv(int fd, struct vector* buf) {
         // closed parenthesis, and a non-empty buffer. complete message.
 
         // FIXME assumes no errors can happen.
-        struct sexp_dyn *sexp = sexp_dyn_read(vec_dat(buf));
+        struct result_sexp r = sexp_read(vec_dat(buf), SEXP_MEMORY_TREE);
         vec_resize(buf, 0);
 
-        return sexp;
+        return r; 
     }
     
-    return NULL;
+    return result_sexp_ok(NULL);
 }
 
 /** returns either the enum value or a string for the enum.
 */
+
 #define USE_STRING_HEADER
+struct result_sexp message_make_header(enum message_type type) {
 #ifdef USE_STRING_HEADER
-#define MAKE_HEADER(type)                                                      \
-    (make_string(#type))
+    return make_string_sexp(g_reflected_message_type[type]);
 #else
-#define MAKE_HEADER(type)                                                      \
-    (make_integer(type))
+    return make_integer_sexp(type);
 
 #endif
+    
+}
 
 
 /*************************** Text Message Functions ***************************/
 struct result_sexp make_text_message(const char *message) {
-    return list((struct sexp_dyn*[]){
-            MAKE_HEADER(MSG_REQUEST_DEBUG),
-            make_string(message)}
-        );
+    return sexp_list(message_make_header(MSG_REQUEST_DEBUG),
+                     make_string_sexp(message));
 }
 
 const char *unwrap_text_message(const struct sexp_dyn *msg) {
@@ -165,10 +154,8 @@ const char *unwrap_text_message(const struct sexp_dyn *msg) {
 
 /************************** Status Message Functions **************************/
 struct result_sexp make_status_message(enum message_status status) {
-    return list((struct sexp_dyn*[]){
-                MAKE_HEADER(MSG_RESPONSE_STATUS),
-                make_integer(status)}
-        );
+    return sexp_list(message_make_header(MSG_RESPONSE_STATUS),
+                     make_integer_sexp(status));
 }
 
 enum message_status unwrap_status_message(const struct sexp_dyn *msg) {
@@ -182,11 +169,9 @@ enum message_status unwrap_status_message(const struct sexp_dyn *msg) {
 /********************* User Credentials Message Functions *********************/
 struct result_sexp
 make_user_credentials_message(const struct user_credentials *creds) {
-    return list((struct sexp_dyn*[]){
-            MAKE_HEADER(MSG_REQUEST_AUTHENTICATE),
-            make_string(vec_dat(creds->username)),
-            make_string(vec_dat(creds->password)),
-        });
+    return sexp_list(message_make_header(MSG_REQUEST_AUTHENTICATE),
+                     make_string_sexp(vec_dat(creds->username)),
+                     make_string_sexp(vec_dat(creds->password)));
 }
 
 struct user_credentials
@@ -212,12 +197,10 @@ unwrap_user_credentials_message(const struct sexp_dyn *msg) {
 /********************** Player Update Message Functions ***********************/
 struct result_sexp
 make_player_update_message(const struct player_update *player_update) {
-
-    return list((struct sexp_dyn*[]){
-            MAKE_HEADER(MSG_REQUEST_PLAYER_UPDATE),
-            coords_vec_to_sexp(player_update->tank_target_coords),
-            coords_vec_to_sexp(player_update->tank_instructions),
-        });
+    return sexp_list(message_make_header(MSG_REQUEST_PLAYER_UPDATE),
+                     coords_vec_to_sexp(player_update->tank_target_coords),
+                     coords_vec_to_sexp(player_update->tank_instructions)
+                     );
 }
 
 struct player_update unwrap_player_update_message(const struct sexp_dyn *msg) {

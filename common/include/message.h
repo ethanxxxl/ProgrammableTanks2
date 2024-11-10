@@ -2,10 +2,15 @@
 #define MESSAGE_H
 
 #include "scenario.h"
+#include "sexp/sexp-base.h"
+#include "enum_reflect.h"
 
 #include <stdint.h>
 #include <vector.h>
 #include <sexp.h>
+
+
+         
 
 // BUG: TODO: add return value to the message callback functions. if
 // there is an error in the functions, then they should return -1, so
@@ -15,35 +20,38 @@
 ///
 /// Response messages are generally SUCCESS, FAIL, or INVALID.
 /// These messages include display/status text in the message body.
-enum message_type {
-  // IDLE STATE REQUESTS
-  MSG_REQUEST_AUTHENTICATE = 0x00,
+REFLECT_ENUM(message_type,
+             // IDLE STATE REQUESTS
+             MSG_REQUEST_AUTHENTICATE,
 
-  // LOBBY STATE REQUESTS
-  MSG_REQUEST_LIST_SCENARIOS,
-  MSG_REQUEST_CREATE_SCENARIO,
-  MSG_REQUEST_JOIN_SCENARIO,
+             // LOBBY STATE REQUESTS
+             MSG_REQUEST_LIST_SCENARIOS,
+             MSG_REQUEST_CREATE_SCENARIO,
+             MSG_REQUEST_JOIN_SCENARIO,
 
-  // SCENARIO STATE REQUESTS
-  MSG_REQUEST_PLAYER_UPDATE,
-  MSG_REQUEST_RETURN_TO_LOBBY,
+             // SCENARIO STATE REQUESTS
+             MSG_REQUEST_PLAYER_UPDATE,
+             MSG_REQUEST_RETURN_TO_LOBBY,
 
-  // MISC REQUESTS
-  MSG_REQUEST_DEBUG,
-  MSG_REQUEST_NULL, // not an actual message type
+             // MISC REQUESTS
+             MSG_REQUEST_DEBUG,
+             MSG_REQUEST_NULL, // not an actual message type
 
-  // RESPONSES
-  MSG_RESPONSE_SCENARIO_TICK = 0x80,
-  MSG_RESPONSE_STATUS,
-
-  MSG_RESPONSE_NULL, // not an actual message type
-  
-  MSG_NULL ,
-};
+             // RESPONSES
+             MSG_RESPONSE_SCENARIO_TICK,
+             MSG_RESPONSE_STATUS,
+             
+             MSG_RESPONSE_NULL, // not an actual message type
+             
+             MSG_NULL,
+             )
 
 struct result_sexp make_message(enum message_type type);
 void message_send(int fd, const struct sexp *message);
 struct result_sexp message_recv(int fd, struct vector *buf);
+
+/** Return the type of the message. */
+enum message_type message_get_type(const sexp *msg);
 
 /* TEXT
  *
@@ -66,8 +74,9 @@ enum message_status {
   MESSAGE_STATUS_INVALID_MESSAGE,
 };
 
-sexp *make_status_message(enum message_status status);
+struct result_sexp make_status_message(enum message_status status);
 enum message_status unwrap_status_message(const sexp *msg);
+struct result_s32 message_status_send(int fd, enum message_status status, const char *brief);
 
 /* USER_CREDENTIALS
  *
@@ -111,5 +120,6 @@ struct scenario_tick {
 
 struct result_sexp make_scenario_tick_message(const struct scenario_tick *tick);
 struct scenario_tick unwrap_scenario_tick_message(const sexp *msg);
+void message_scenario_tick_add_player(sexp **msg, const struct player_data* pd);
 
 #endif

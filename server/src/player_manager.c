@@ -1,8 +1,10 @@
 #include "player_manager.h"
+#include "error.h"
 #include "server-scenario.h"
 
 #include "scenario.h"
 #include "message.h"
+#include "sexp/sexp-base.h"
 
 #include <player_manager.h>
 #include <stdio.h>
@@ -16,43 +18,50 @@ int make_player(struct player_manager *p) {
     return 0;
 }
 
-int player_idle_handler(struct player_manager *p, struct message msg) {
-    switch (msg.type) {
-    case MSG_REQUEST_AUTHENTICATE:
-        strcpy(p->username, vec_dat(msg.user_credentials.username));
+struct result_void player_idle_handler(struct player_manager *p, sexp *msg) {
+    switch (message_get_type(msg)) {
+    case MSG_REQUEST_AUTHENTICATE: {
+        struct user_credentials user_credentials =
+            unwrap_user_credentials_message(msg);
+        
+        strcpy(p->username, vec_dat(user_credentials.username));
         p->state = STATE_LOBBY; // FIXME: no authentication done here!
         printf("%s: authenticated\n", p->username);
         printf("%s: authenticated (msg data)\n",
-               (char*)vec_dat(msg.user_credentials.username));
+               (char*)vec_dat(user_credentials.username));
         
         {
             char buf[50] = {0};
             int ret =
                 snprintf(buf, 50, "authenticated %s.", p->username);
             if (ret < 0)
-                return -1; // name was too large for the buffer.
+                return RESULT_MSG_ERROR(void, "Name was too large for the buffer");
 
-            
-            message_send_conf(p->socket, MSG_RESPONSE_SUCCESS,
-                              buf);
+            struct result_s32 r =
+                message_status_send(p->socket, MESSAGE_STATUS_SUCCESS, NULL);
+            if (r.status == RESULT_ERROR) return result_void_error(r.error);
         }
 
         break;
-                 
-    default: 
-        message_send_conf(p->socket, MSG_RESPONSE_FAIL,
-                          "you must be authenticated first");
+    }
+    default: {
+        struct result_s32 r = message_status_send(p->socket, MESSAGE_STATUS_FAIL,
+                            "you must be authenticated first");
+        if (r.status == RESULT_ERROR) return result_void_error(r.error);
         break;
     }
+    }
 
-    return 0;
+    return result_void_ok(0);
 }
 
-int player_lobby_handler(struct player_manager *p, struct message msg) {
-    switch (msg.type) {
+struct result_void player_lobby_handler(struct player_manager *p, sexp *msg) {
+    struct result_s32 r;
+    
+    switch (message_get_type(msg)) {
     case MSG_REQUEST_LIST_SCENARIOS:
-        message_send_conf(p->socket, MSG_RESPONSE_SUCCESS,
-                   "There is only one scenario (0)");
+        r = message_status_send(p->socket, MESSAGE_STATUS_SUCCESS,
+                                "There is only one scenario (0)");
         break;
     case MSG_REQUEST_CREATE_SCENARIO:
         break;
@@ -61,21 +70,25 @@ int player_lobby_handler(struct player_manager *p, struct message msg) {
         p->state = STATE_SCENARIO;
 
         scenario_add_player(&g_scenario, p);
-        
-        message_send_conf(p->socket, MSG_RESPONSE_SUCCESS,
-                   "entering scenario...");
+
+        r = message_status_send(p->socket, MESSAGE_STATUS_SUCCESS,
+                                "entering scenario...");
         break;
     default:
-        message_send_conf(p->socket, MSG_RESPONSE_INVALID_REQUEST,
+        r = message_status_send(p->socket, MESSAGE_STATUS_INVALID_MESSAGE,
                           "not supported in lobby.");
         break;
     }
-    
-    return 0;
+
+    if (r.status == RESULT_ERROR)
+        return result_void_error(r.error);
+    else
+        return result_void_ok(0);
 }
 
-int player_scenario_handler(struct player_manager *p, struct message msg) {
-    switch (msg.type) {
+struct result_void player_scenario_handler(struct player_manager *p, sexp *msg) {
+    struct result_s32 r;
+    switch (message_get_type(msg)) {
     case MSG_REQUEST_RETURN_TO_LOBBY:
         // FIXME: there should be some limitations on when a player can exit a
         // scenario. don't want a player to be able to leave in the heat of
@@ -86,9 +99,9 @@ int player_scenario_handler(struct player_manager *p, struct message msg) {
         scenario_rem_player(&g_scenario, p);
 
         // TODO: remove player from global scenario.
-        message_send_conf(p->socket, MSG_RESPONSE_SUCCESS,
-                          "returning to lobby...");
-
+        
+        r = message_status_send(p->socket, MESSAGE_STATUS_SUCCESS,
+                                "returning to lobby...");
         break;
         
     case MSG_REQUEST_PLAYER_UPDATE: {
@@ -97,7 +110,7 @@ int player_scenario_handler(struct player_manager *p, struct message msg) {
 
         // ensure the client doesn't try to update more tanks than actually
         // exist.
-        const struct player_update body = msg.player_update;
+        const struct player_update body = unwrap_player_update_message(msg);
         
         int num_tanks = vec_len(body.tank_instructions);
         if (TANKS_IN_SCENARIO < num_tanks)
@@ -123,24 +136,27 @@ int player_scenario_handler(struct player_manager *p, struct message msg) {
         }
         
         
-        message_send_conf(p->socket, MSG_RESPONSE_FAIL,
-                   "updated successfully");
-    }
+        r = message_status_send(p->socket, MESSAGE_STATUS_SUCCESS,
+                                "updated successfully");
         break;
+    }
     case MSG_REQUEST_DEBUG:
-        message_send_conf(p->socket, MSG_RESPONSE_FAIL,
-                   "not implemented");
+        r = message_status_send(p->socket, MESSAGE_STATUS_FAIL,
+                                "not implemented");
         break;
 
         
     default:
-        message_send_conf(p->socket, MSG_RESPONSE_INVALID_REQUEST,
-                   "command not supported in scenario.");
+        r = message_status_send(p->socket, MESSAGE_STATUS_INVALID_MESSAGE,
+                                "command not supported in scenario.");
         break;
 
     }
                   
-    return 0;
+    if (r.status == RESULT_ERROR)
+        return result_void_error(r.error);
+    else
+        return result_void_ok(0);
 }
 
 void print_player(struct player_manager *p) {
