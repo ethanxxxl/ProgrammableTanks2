@@ -11,7 +11,7 @@ CFLAGS =  --std=gnu2x -Wall -Wextra -Werror -Wunused-result -pedantic -ftrapv -g
 BUILDDIR = target
 
 COMMON_DIR = common/src
-SRC_COMMON = vector.c command-line.c scenario.c message.c result.c \
+SRC_COMMON = vector.c command-line.c scenario.c message.c error.c \
              sexp/sexp-base.c sexp/sexp-io.c sexp/sexp-utils.c
 
 SERVER_DIR = server/src

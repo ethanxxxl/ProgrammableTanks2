@@ -191,7 +191,7 @@ sexp_length(const sexp *s) {
     return result_u32_ok(n);
 }
 
-struct result_sexp sexp_push(sexp *list, enum sexp_type type, void* data) {
+struct result_sexp _sexp_push_data(sexp *list, enum sexp_type type, void* data) {
     struct result_sexp r = sexp_last(list);
     if (r.status == RESULT_ERROR)
         return r;
@@ -217,15 +217,15 @@ struct result_sexp sexp_push(sexp *list, enum sexp_type type, void* data) {
 }
 
 struct result_sexp sexp_push_integer(sexp *list, s32 num) {
-    return sexp_push(list, SEXP_INTEGER, &num);
+    return _sexp_push_data(list, SEXP_INTEGER, &num);
 }
 
 struct result_sexp sexp_push_string(sexp *list, const char *str) {
-    return sexp_push(list, SEXP_STRING, (void*)str);
+    return _sexp_push_data(list, SEXP_STRING, (void*)str);
 }
 
 struct result_sexp sexp_push_symbol(sexp *list, const char *sym) {
-    return sexp_push(list, SEXP_SYMBOL, (void*)sym);
+    return _sexp_push_data(list, SEXP_SYMBOL, (void*)sym);
 }
 
 struct result_sexp sexp_tag_get_tag(const sexp *s) {

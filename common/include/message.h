@@ -1,8 +1,9 @@
 #ifndef MESSAGE_H
 #define MESSAGE_H
 
+#include "error.h"
 #include "scenario.h"
-#include "sexp/sexp-base.h"
+#include "sexp.h"
 #include "enum_reflect.h"
 
 #include <stdint.h>
@@ -43,8 +44,10 @@ REFLECT_ENUM(message_type,
              
              MSG_RESPONSE_NULL, // not an actual message type
              
-             MSG_NULL,
-             )
+             MSG_NULL)
+
+DEFINE_RESULT_TYPE_CUSTOM(enum message_type, message_type)
+
 
 struct result_sexp make_message(enum message_type type);
 void message_send(int fd, const struct sexp *message);
@@ -59,7 +62,7 @@ enum message_type message_get_type(const sexp *msg);
  * text for debug/logging purposes. This generic message is associated with the
  * text field in the message union. */
 struct result_sexp make_text_message(const char *message);
-const char *unwrap_text_message(const sexp *msg);
+struct result_str unwrap_text_message(const sexp *msg);
 /* STATUS
 
    A message that indicates whether the previous message sent by the client was:
@@ -74,8 +77,10 @@ enum message_status {
   MESSAGE_STATUS_INVALID_MESSAGE,
 };
 
+DEFINE_RESULT_TYPE_CUSTOM(enum message_status, message_status)
+
 struct result_sexp make_status_message(enum message_status status);
-enum message_status unwrap_status_message(const sexp *msg);
+struct result_message_status  unwrap_status_message(const sexp *msg);
 struct result_s32 message_status_send(int fd, enum message_status status, const char *brief);
 
 /* USER_CREDENTIALS
@@ -87,10 +92,12 @@ struct user_credentials {
     struct vector* password;
 };
 
+DEFINE_RESULT_TYPE_CUSTOM(struct user_credentials, user_credentials)
+
 struct result_sexp
 make_user_credentials_message(const struct user_credentials *creds);
 
-struct user_credentials
+struct result_user_credentials
 unwrap_user_credentials_message(const sexp *msg);
 
 /* PLAYER_UPDATE
@@ -103,10 +110,12 @@ struct player_update {
     struct vector* tank_instructions;
 };
 
+DEFINE_RESULT_TYPE_CUSTOM(struct player_update, player_update)
+
 struct result_sexp
 make_player_update_message(const struct player_update *player_update);
 
-struct player_update unwrap_player_update_message(const struct sexp *msg);
+struct result_player_update unwrap_player_update_message(const struct sexp *msg);
 
 
 /* SCENARIO_TICK
@@ -118,8 +127,10 @@ struct scenario_tick {
     struct vector* players_public_data;
 };
 
+DEFINE_RESULT_TYPE_CUSTOM(struct scenario_tick, scenario_tick)
+
 struct result_sexp make_scenario_tick_message(const struct scenario_tick *tick);
-struct scenario_tick unwrap_scenario_tick_message(const sexp *msg);
+struct result_scenario_tick unwrap_scenario_tick_message(const sexp *msg);
 void message_scenario_tick_add_player(sexp **msg, const struct player_data* pd);
 
 #endif

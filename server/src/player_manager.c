@@ -21,8 +21,9 @@ int make_player(struct player_manager *p) {
 struct result_void player_idle_handler(struct player_manager *p, sexp *msg) {
     switch (message_get_type(msg)) {
     case MSG_REQUEST_AUTHENTICATE: {
-        struct user_credentials user_credentials =
-            unwrap_user_credentials_message(msg);
+        struct user_credentials user_credentials;
+        RESULT_UNWRAP(void, user_credentials,
+                      unwrap_user_credentials_message(msg));
         
         strcpy(p->username, vec_dat(user_credentials.username));
         p->state = STATE_LOBBY; // FIXME: no authentication done here!
@@ -110,7 +111,8 @@ struct result_void player_scenario_handler(struct player_manager *p, sexp *msg) 
 
         // ensure the client doesn't try to update more tanks than actually
         // exist.
-        const struct player_update body = unwrap_player_update_message(msg);
+        struct player_update body;
+        RESULT_UNWRAP(void, body, unwrap_player_update_message(msg));
         
         int num_tanks = vec_len(body.tank_instructions);
         if (TANKS_IN_SCENARIO < num_tanks)

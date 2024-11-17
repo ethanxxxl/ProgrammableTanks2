@@ -1,3 +1,4 @@
+#include "error.h"
 #include "player_manager.h"
 #include "command-line.h"
 #include "server-commands.h"
@@ -137,10 +138,17 @@ void handle_client(struct player_manager* p, struct vector* msg_buf) {
 
     enum message_type msg_type = message_get_type(msg);
     if (msg_type == MSG_REQUEST_DEBUG) {
-        const char *msg_text = unwrap_text_message(msg);
-        printf("%s: %s\n", p->username, msg_text);
+        struct result_str r = unwrap_text_message(msg);
+        if (r.status == RESULT_OK) 
+            printf("%s: %s\n", p->username, r.ok);
+        else {
+            // TODO: handle error properly (maybe do some logging?)
+            puts(describe_error(r.error));
+            free_error(r.error);
+            return;
+        }
         
-        if (strcmp(msg_text, "kill-serv") == 0) {
+        if (strcmp(r.ok, "kill-serv") == 0) {
             g_run_server = false;
         }
     }

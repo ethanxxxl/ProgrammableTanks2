@@ -4,6 +4,7 @@
 #include "error.h"
 #include "nonstdint.h"
 #include "error.h"
+#include "enum_reflect.h"
 
 /**************************** SEXP IMPLEMENTATION *****************************/
 /** The S-Expression (sexp) memory layout/allocation method.
@@ -142,25 +143,20 @@ union sexp_data {
 
 /************************** ERRORS AND RETURN TYPES ***************************/
 
-#define FOR_EACH_RESULT_TYPE(RESULT)                         \
-         RESULT(SEXP_RESULT_ERR)                             \
-         RESULT(SEXP_RESULT_BAD_NETSTRING_LENGTH)            \
-         RESULT(SEXP_RESULT_NETSTRING_MISSING_COLON)         \
-         RESULT(SEXP_RESULT_TAG_NOT_CLOSED)                  \
-         RESULT(SEXP_RESULT_TAG_MISSING_TAG)                 \
-         RESULT(SEXP_RESULT_TAG_MISSING_SYMBOL)              \
-         RESULT(SEXP_RESULT_LIST_NOT_CLOSED)                 \
-         RESULT(SEXP_RESULT_QUOTE_NOT_CLOSED)                \
-         RESULT(SEXP_RESULT_SYMBOL_ESCAPE_NOT_CLOSED)        \
-         RESULT(SEXP_RESULT_INVALID_CHARACTER)               \
-         RESULT(SEXP_RESULT_TRAILING_GARBAGE)                \
-         RESULT(SEXP_RESULT_NULL_SEXP_PARAMETER)             \
- 
-enum sexp_reader_error_code {
-    FOR_EACH_RESULT_TYPE(GENERATE_ENUM)
-};
+REFLECT_ENUM(sexp_reader_error_code,
+             SEXP_RESULT_ERR,
+             SEXP_RESULT_BAD_NETSTRING_LENGTH,
+             SEXP_RESULT_NETSTRING_MISSING_COLON,
+             SEXP_RESULT_TAG_NOT_CLOSED,
+             SEXP_RESULT_TAG_MISSING_TAG,
+             SEXP_RESULT_TAG_MISSING_SYMBOL,
+             SEXP_RESULT_LIST_NOT_CLOSED,
+             SEXP_RESULT_QUOTE_NOT_CLOSED,
+             SEXP_RESULT_SYMBOL_ESCAPE_NOT_CLOSED,
+             SEXP_RESULT_INVALID_CHARACTER,
+             SEXP_RESULT_TRAILING_GARBAGE,
+             SEXP_RESULT_NULL_SEXP_PARAMETER)
 
-extern const char* G_READER_RESULT_TYPE_STR[];
 
 /**
  If the reader encounters an error during parsing (malformed input), it will

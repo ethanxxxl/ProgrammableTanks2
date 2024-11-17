@@ -2,12 +2,8 @@
 #include "error.h"
 #include "scenario.h"
 #include "message.h"
-#include "sexp/sexp-base.h"
-#include "sexp/sexp-utils.h"
 #include "vector.h"
 #include "nonstdint.h"
-#include "sexp.h"
-
 
 #include <fcntl.h>
 #include <netinet/in.h>
@@ -35,7 +31,7 @@ struct result_sexp coords_vec_to_sexp(struct vector *coords) {
     if (r.status == RESULT_ERROR)
         return r;
 
-    struct sexp *root = r.ok;
+    sexp *root = r.ok;
 
     for (u32 i = 0; i < vec_len(coords); i++) {
         struct coord *c = vec_ref(coords, i);
@@ -47,7 +43,7 @@ struct result_sexp coords_vec_to_sexp(struct vector *coords) {
     return result_sexp_ok(root);
 }
 
-struct result_vec coords_sexp_to_vector(struct sexp *coords) {
+struct result_vec coords_sexp_to_vector(sexp *coords) {
     struct vector *vec = make_vector(sizeof(struct coord), 32);
 
     struct result_sexp r;
@@ -79,7 +75,7 @@ struct result_vec coords_sexp_to_vector(struct sexp *coords) {
 }
 
 
-void message_send(int fd, const struct sexp *msg) {
+void message_send(int fd, const sexp *msg) {
     (void)fd;
     (void)msg;
 
@@ -144,13 +140,14 @@ struct result_sexp make_text_message(const char *message) {
                      make_string_sexp(message));
 }
 
-const char *unwrap_text_message(const struct sexp_dyn *msg) {
-    if (nth(msg, 1)->type != SEXP_STRING)
-        return NULL;
-
-    return nth(msg, 1)->text;
+struct result_str unwrap_text_message(const sexp *msg) {
+    const sexp *first;
+    RESULT_UNWRAP(str, first, sexp_nth(msg, 1));
+    
+    // if first is not an integer, then it will return an error.
+    // TODO: create a more descriptive error that includes the text message context
+    return sexp_str_val(first);
 }
-
 
 /************************** Status Message Functions **************************/
 struct result_sexp make_status_message(enum message_status status) {
@@ -158,12 +155,16 @@ struct result_sexp make_status_message(enum message_status status) {
                      make_integer_sexp(status));
 }
 
-enum message_status unwrap_status_message(const struct sexp_dyn *msg) {
-    if (nth(msg, 1)->type != SEXP_INTEGER) {
-        // TODO what to do if this is wrong!?
-    }
-        
-    return nth(msg, 1)->integer;
+struct result_message_status unwrap_status_message(const sexp *msg) {
+    const sexp *first;
+    RESULT_UNWRAP(message_status, first, sexp_nth(msg, 1));
+
+    struct result_s32 r = sexp_int_val(first);
+
+    if (r.status == RESULT_OK)
+        return result_message_status_ok(r.ok);
+    else 
+        return result_message_status_error(r.error);
 }
 
 /********************* User Credentials Message Functions *********************/
@@ -174,24 +175,28 @@ make_user_credentials_message(const struct user_credentials *creds) {
                      make_string_sexp(vec_dat(creds->password)));
 }
 
-struct user_credentials
-unwrap_user_credentials_message(const struct sexp_dyn *msg) {
+struct result_user_credentials
+unwrap_user_credentials_message(const sexp *msg) {
     struct user_credentials creds;
 
-    struct sexp_dyn *username = nth(msg, 1);
-    struct sexp_dyn *password = nth(msg, 2);
+    sexp *username;
+    sexp *password;
+    RESULT_UNWRAP(user_credentials, username, sexp_nth(msg, 1));
+    RESULT_UNWRAP(user_credentials, password, sexp_nth(msg, 2));
 
-    if (username->type != SEXP_STRING || password->type != SEXP_STRING) {
-        // TODO  what to do if this wrong!?
-    }
-    
-    creds.username = make_vector(sizeof(char), username->text_len);
-    vec_pushn(creds.username, username->text, username->text_len);
-    
-    creds.password = make_vector(sizeof(char), password->text_len);
-    vec_pushn(creds.password, password->text, password->text_len);
+    char *username_str;
+    char *password_str;
+    RESULT_UNWRAP(user_credentials, username_str, sexp_str_val(username));
+    RESULT_UNWRAP(user_credentials, password_str, sexp_str_val(password));
 
-    return creds;
+    // data length will be the length of the encoded string
+    creds.username = make_vector(sizeof(char), username->data_length);
+    vec_pushn(creds.username, username_str, username->data_length);
+    
+    creds.password = make_vector(sizeof(char), password->data_length);
+    vec_pushn(creds.password, password_str, password->data_length);
+
+    return result_user_credentials_ok(creds);
 }
 
 /********************** Player Update Message Functions ***********************/
@@ -203,25 +208,37 @@ make_player_update_message(const struct player_update *player_update) {
                      );
 }
 
-struct player_update unwrap_player_update_message(const struct sexp_dyn *msg) {
+struct result_player_update unwrap_player_update_message(const sexp *msg) {
     struct player_update update;
 
-    struct sexp_dyn *targets = nth(msg, 1);
-    struct sexp_dyn *commands = nth(msg, 2);
+    sexp *targets;
+    sexp *commands;
+    RESULT_UNWRAP(player_update, targets, sexp_nth(msg, 1));
+    RESULT_UNWRAP(player_update, commands, sexp_nth(msg, 2));
 
-    update.tank_target_coords = coords_sexp_to_vector(targets);
+    // convert target coordinates, returning any error
+    RESULT_UNWRAP(player_update, update.tank_target_coords,
+                  coords_sexp_to_vector(targets));
 
     update.tank_instructions = make_vector(sizeof(enum tank_command),
                                            vec_len(update.tank_target_coords));
 
     for (u32 c = 0;
-         (c < vec_len(update.tank_target_coords)) || is_nil(commands);
+         (c < vec_len(update.tank_target_coords)) || sexp_is_nil(commands);
          c++) {
-        vec_push(update.tank_instructions, &car(commands)->integer);
-        commands = cdr(commands);
+
+        sexp *car;
+        RESULT_UNWRAP(player_update, car, sexp_car(commands));
+        
+        enum tank_command cmd;
+        RESULT_UNWRAP(player_update, cmd, sexp_int_val(car));
+        vec_push(update.tank_instructions, &cmd);
+
+        // go to next element in commands, returning any errors that occur
+        RESULT_UNWRAP(player_update, commands, sexp_cdr(commands));
     }
 
-    return update;
+    return result_player_update_ok(update);
 }
 
 /********************** Scenario Tick Message Functions ***********************/
@@ -233,47 +250,60 @@ struct player_update unwrap_player_update_message(const struct sexp_dyn *msg) {
  */
  
 struct result_sexp make_scenario_tick_message(const struct scenario_tick *tick) {
-    struct sexp *msg_root = make_cons(NULL, NULL);
-    struct sexp *msg = msg_root;
+    sexp *msg_root;
+    RESULT_UNWRAP(sexp, msg_root, make_cons_sexp());
+
+    struct result_sexp msg = result_sexp_ok(msg_root);
 
     for (u32 p = 0; p < vec_len(tick->players_public_data); p++ ) {
         struct player_public_data *data = vec_ref(tick->players_public_data, p);
 
-        append(msg, list((struct sexp_dyn *[])
-                         { make_string(vec_dat(data->username)),
-                           coords_vec_to_sexp(data->tank_positions),
-                         }));
+        struct result_sexp encoded_player_data = 
+            sexp_list(make_string_sexp(vec_dat(data->username)),
+                      coords_vec_to_sexp(data->tank_positions));
 
-        msg = cdr(msg);
+        msg = sexp_rpush(msg, encoded_player_data);
     }
 
-    return msg_root;
+    if (msg.status == RESULT_ERROR)
+        return msg;
+    else
+        return result_sexp_ok(msg_root);
 }
 
-struct scenario_tick unwrap_scenario_tick_message(const struct sexp_dyn *msg) {
+struct result_scenario_tick unwrap_scenario_tick_message(const sexp *msg) {
     struct scenario_tick tick = {
         .players_public_data = make_vector(sizeof(struct player_public_data), 10)
     };
 
-    s32 num_players = length(msg) - 1;
+    s32 num_players;
+    RESULT_UNWRAP(scenario_tick, num_players, sexp_length(msg));
+    num_players--; // remove the "SCENARIO-TICK" symbol
 
-    struct sexp_dyn *player = cdr(msg);
+    sexp *player;
+    RESULT_UNWRAP(scenario_tick, player, sexp_cdr(msg))
 
     for (s32 i = 0; i < num_players; i++) {
         struct player_public_data data;
+        sexp *username;
+        RESULT_UNWRAP(scenario_tick, username, sexp_nth(player, 0));
 
-        struct sexp_dyn *username = nth(player, 0);
-        struct sexp_dyn *tank_coords = nth(player, 1);
+        sexp *tank_coords;
+        RESULT_UNWRAP(scenario_tick, tank_coords, sexp_nth(player, 1));
 
-        data.username = make_vector(sizeof(char), username->text_len);
-        vec_pushn(data.username, username->text, username->text_len);
-        
-        data.tank_positions = coords_sexp_to_vector(tank_coords);
+        char *username_str;
+        RESULT_UNWRAP(scenario_tick, username_str, sexp_str_val(username));
+
+        data.username = make_vector(sizeof(char), username->data_length);
+        vec_pushn(data.username, username_str, username->data_length);
+
+        RESULT_UNWRAP(scenario_tick, data.tank_positions,
+                      coords_sexp_to_vector(tank_coords));
 
         vec_push(tick.players_public_data, &data);
 
-        player = cdr(player);
+        RESULT_UNWRAP(scenario_tick, player, sexp_cdr(player));
     }
 
-    return tick;
+    return result_scenario_tick_ok(tick);
 }

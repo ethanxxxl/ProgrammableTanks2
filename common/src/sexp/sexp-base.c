@@ -7,10 +7,6 @@
 #include <string.h>
 #include <stdbool.h>
 
-const char* G_READER_RESULT_TYPE_STR[] = {
-    FOR_EACH_RESULT_TYPE(GENERATE_STRING)
-};
-
 struct result_sexp reader_err(enum sexp_reader_error_code code,
                               const char *input,
                               const char* location) {
@@ -230,6 +226,9 @@ struct result_sexp make_sexp(enum sexp_type type,
     struct sexp *root;
     
     if (method == SEXP_MEMORY_LINEAR) {
+        return RESULT_MSG_ERROR(sexp, "Not Implemented");
+        // TODO finish linnear sexp implementation.
+        
         // INITIALIZE HANDLE
         root = malloc(sizeof(struct sexp) + sizeof(struct sexp *));
 
@@ -279,13 +278,32 @@ struct result_sexp make_sexp(enum sexp_type type,
 
         *(struct sexp **)root->data = value;
 
-        sexp *capacity_field = sexp_nth(value, 1);
-        sexp_set_integer(capacity_field, capacity);
+        // sexp *capacity_field = sexp_nth(value, 1);
+        // sexp_set_integer(capacity_field, capacity);
         
         return result_sexp_ok(root);
+    } else {
+        /////////////////////////// CREATE TREE SEXP ///////////////////////////
+        size_t data_len;
+        switch (type) {
+        case SEXP_STRING:
+        case SEXP_SYMBOL:
+            data_len = strlen(data);
+        case SEXP_INTEGER:
+            data_len = sizeof(s32);
+        case SEXP_CONS:
+            data_len = sizeof(struct cons);
+        default:
+            data_len = 0;
+        }
+
+        root = malloc(sizeof(struct sexp) + sizeof(union sexp_data));
+        if (root == NULL)
+            return RESULT_MSG_ERROR(sexp, "malloc returned NULL");
+
+        if (data != NULL)
+            memcpy(root->data, data, data_len);
+
+        return result_sexp_ok(root);
     }
-
-    return RESULT_MSG_ERROR(sexp, "Not Implemented");
-
-    // TODO copy tree memory implementation method here.
 }
