@@ -31,11 +31,6 @@ void free_error(const struct error e);
 const char *describe_msg_error(void *self);
 void free_msg_error(void *self);
 
-const struct error_ops MSG_ERROR_OPS = {
-    .describe = describe_msg_error,
-    .free = free_msg_error,
-};
-
 struct error make_msg_error(const char *fmt, ...);
 struct error vmake_msg_error(const char *fmt, va_list args);
 struct error make_msg_error_with_location(const char *file,
@@ -45,24 +40,13 @@ struct error make_msg_error_with_location(const char *file,
 
 /***************************** Result Object Type *****************************/
 
-/*
-
-  You want an error type system that can be used across your program, and
-  provide a unified way of returning/handling errors.
-
-  REQUIREMENTS:
-  - Provide a result/option type that can contain error information
-  - Allow for returns to be passed by value and not exclusively by reference.
-  - Allow for type-safety to be maintained with return values.
-  - Should not be prohibitively cumbersome to create, check for, or handle errors.
-*/
-
 enum result_status {
     RESULT_OK,
     RESULT_ERROR,
 };
 
-#define DEFINE_RESULT_TYPE_CUSTOM(type, name)                                  \
+/** Macro that declares */
+#define DECLARE_RESULT_TYPE_CUSTOM(type, name)                                  \
   struct result_##name {                                                       \
     enum result_status status;                                                 \
     union {                                                                    \
@@ -71,14 +55,24 @@ enum result_status {
     };                                                                         \
   };                                                                           \
                                                                                \
+  type result_unwrap_##name(struct result_##name r);                           \
+  struct result_##name result_##name##_ok(type t);                             \
+  struct result_##name result_##name##_error(struct error e);                  \
+  struct result_##name result_##name##_msg_error(const char *str, ...);
+
+#define DECLARE_RESULT_TYPE(type) DECLARE_RESULT_TYPE_CUSTOM(type, type)
+
+#define IMPL_RESULT_TYPE_CUSTOM(type, name)                                    \
   type result_unwrap_##name(struct result_##name r) { return r.ok; }           \
                                                                                \
   struct result_##name result_##name##_ok(type t) {                            \
     return (struct result_##name){.status = RESULT_OK, .ok = t};               \
   }                                                                            \
+                                                                               \
   struct result_##name result_##name##_error(struct error e) {                 \
     return (struct result_##name){.status = RESULT_ERROR, .error = e};         \
   }                                                                            \
+                                                                               \
   struct result_##name result_##name##_msg_error(const char *str, ...) {       \
     va_list args;                                                              \
     va_start(args, str);                                                       \
@@ -86,24 +80,24 @@ enum result_status {
                                   .error = vmake_msg_error(str, args)};        \
   }
 
-#define DEFINE_RESULT_TYPE(type) DEFINE_RESULT_TYPE_CUSTOM(type, type)
+#define IMPL_RESULT_TYPE(type) IMPL_RESULT_TYPE_CUSTOM(type, type)
 
-DEFINE_RESULT_TYPE(s8)
-DEFINE_RESULT_TYPE(s16)
-DEFINE_RESULT_TYPE(s32)
-DEFINE_RESULT_TYPE(s64)
-DEFINE_RESULT_TYPE(u8)
-DEFINE_RESULT_TYPE(u16)
-DEFINE_RESULT_TYPE(u32)
-DEFINE_RESULT_TYPE(u64)
-DEFINE_RESULT_TYPE(f32)
-DEFINE_RESULT_TYPE(f64)
+DECLARE_RESULT_TYPE(s8)
+DECLARE_RESULT_TYPE(s16)
+DECLARE_RESULT_TYPE(s32)
+DECLARE_RESULT_TYPE(s64)
+DECLARE_RESULT_TYPE(u8)
+DECLARE_RESULT_TYPE(u16)
+DECLARE_RESULT_TYPE(u32)
+DECLARE_RESULT_TYPE(u64)
+DECLARE_RESULT_TYPE(f32)
+DECLARE_RESULT_TYPE(f64)
 
-DEFINE_RESULT_TYPE_CUSTOM(char *, str)
-DEFINE_RESULT_TYPE_CUSTOM(void *, voidp)
+DECLARE_RESULT_TYPE_CUSTOM(char *, str)
+DECLARE_RESULT_TYPE_CUSTOM(void *, voidp)
 
 // this is meant to be used when a function optionally returns an error.
-DEFINE_RESULT_TYPE_CUSTOM(u8, void)
+DECLARE_RESULT_TYPE_CUSTOM(u8, void)
 
 /****************************** Convience Macros ******************************/
 

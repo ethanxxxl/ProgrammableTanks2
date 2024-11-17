@@ -143,20 +143,21 @@ union sexp_data {
 
 /************************** ERRORS AND RETURN TYPES ***************************/
 
-REFLECT_ENUM(sexp_reader_error_code,
-             SEXP_RESULT_ERR,
-             SEXP_RESULT_BAD_NETSTRING_LENGTH,
-             SEXP_RESULT_NETSTRING_MISSING_COLON,
-             SEXP_RESULT_TAG_NOT_CLOSED,
-             SEXP_RESULT_TAG_MISSING_TAG,
-             SEXP_RESULT_TAG_MISSING_SYMBOL,
-             SEXP_RESULT_LIST_NOT_CLOSED,
-             SEXP_RESULT_QUOTE_NOT_CLOSED,
-             SEXP_RESULT_SYMBOL_ESCAPE_NOT_CLOSED,
-             SEXP_RESULT_INVALID_CHARACTER,
-             SEXP_RESULT_TRAILING_GARBAGE,
-             SEXP_RESULT_NULL_SEXP_PARAMETER)
-
+#define READER_ERROR_CODE_ENUM_VALUES           \
+        SEXP_RESULT_ERR,                        \
+        SEXP_RESULT_BAD_NETSTRING_LENGTH,       \
+        SEXP_RESULT_NETSTRING_MISSING_COLON,    \
+        SEXP_RESULT_TAG_NOT_CLOSED,             \
+        SEXP_RESULT_TAG_MISSING_TAG,            \
+        SEXP_RESULT_TAG_MISSING_SYMBOL,         \
+        SEXP_RESULT_LIST_NOT_CLOSED,            \
+        SEXP_RESULT_QUOTE_NOT_CLOSED,           \
+        SEXP_RESULT_SYMBOL_ESCAPE_NOT_CLOSED,   \
+        SEXP_RESULT_INVALID_CHARACTER,          \
+        SEXP_RESULT_TRAILING_GARBAGE,           \
+        SEXP_RESULT_NULL_SEXP_PARAMETER
+enum sexp_reader_error_code { READER_ERROR_CODE_ENUM_VALUES };
+extern const char *g_reflected_sexp_reader_error_code[];
 
 /**
  If the reader encounters an error during parsing (malformed input), it will
@@ -177,11 +178,6 @@ struct error sexp_reader_error(enum sexp_reader_error_code, const char *input,
 const char *describe_sexp_reader_error(void *self);
 void free_sexp_reader_error(void *self);
 
-const struct error_ops SEXP_READER_ERROR_OPS = {
-    .describe = describe_sexp_reader_error,
-    .free = free_sexp_reader_error,
-};
-
 /** Single function to return an error wrapped in a `struct sexp_result type`.
     calls `sexp_reader_error()` to generate the error.  NOTE: the RESULT_OK
     equivalent of this function is `result_sexp_ok()` that is defined with the
@@ -198,7 +194,7 @@ struct result_sexp reader_err(enum sexp_reader_error_code code,
                               const char *location);
 
 /** Tagged Union for the reader, utilities, etc.*/
-DEFINE_RESULT_TYPE_CUSTOM(struct sexp *, sexp)
+DECLARE_RESULT_TYPE_CUSTOM(struct sexp *, sexp)
 
     
 /******************************** INITIALIZERS ********************************/

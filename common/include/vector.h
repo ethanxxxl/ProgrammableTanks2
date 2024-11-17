@@ -16,7 +16,7 @@
 struct vector;
 typedef struct vector vector;
 
-DEFINE_RESULT_TYPE_CUSTOM(vector *, vec)
+DECLARE_RESULT_TYPE_CUSTOM(vector *, vec)
 
 /**
  * initialize a new vector.

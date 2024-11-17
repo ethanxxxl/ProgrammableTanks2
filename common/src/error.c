@@ -6,6 +6,21 @@
 #include <stdarg.h>
 #include <stdio.h>
 
+/************************* Generic Result Type Impls **************************/
+IMPL_RESULT_TYPE(s8)
+IMPL_RESULT_TYPE(s16)
+IMPL_RESULT_TYPE(s32)
+IMPL_RESULT_TYPE(s64)
+IMPL_RESULT_TYPE(u8)
+IMPL_RESULT_TYPE(u16)
+IMPL_RESULT_TYPE(u32)
+IMPL_RESULT_TYPE(u64)
+IMPL_RESULT_TYPE(f32)
+IMPL_RESULT_TYPE(f64)
+IMPL_RESULT_TYPE_CUSTOM(char *, str)
+IMPL_RESULT_TYPE_CUSTOM(void *, voidp)
+IMPL_RESULT_TYPE_CUSTOM(u8, void)
+
 /***************************** Error Object Type ******************************/
 const char *describe_error(const struct error e) {
     if (e.operations->describe != NULL)
@@ -38,6 +53,11 @@ struct error make_msg_error(const char *fmt, ...) {
 
     return vmake_msg_error(fmt, args);
 }
+
+const struct error_ops MSG_ERROR_OPS = {
+    .describe = describe_msg_error,
+    .free = free_msg_error,
+};
 
 struct error vmake_msg_error(const char *fmt, va_list args) {
     char *message;

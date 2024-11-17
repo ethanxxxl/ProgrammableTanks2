@@ -1,15 +1,15 @@
 #ifndef SEXP_H
 #define SEXP_H
 
-#include "sexp/sexp-base.h"
-#include "sexp/sexp-io.h"
-#include "sexp/sexp-utils.h"
+/* IWYU pragmas are magic comments used by the "include what you use tool"
+   https://clangd.llvm.org/guides/include-cleaner
 
-void do_not_use_me_I_am_suppressing_warnings(void) {
-    struct result_sexp test = sexp_read("(hello there)", SEXP_MEMORY_TREE);
-    sexp_rcar(test);
-    (void)test;
-    return;
-}
+   the comments in this file are used to suppress the "unused incldue" warnings
+   that otherwise occure when compiling with clang.
+ */
+
+#include "sexp/sexp-base.h"  // IWYU pragma: export
+#include "sexp/sexp-io.h"    // IWYU pragma: export
+#include "sexp/sexp-utils.h" // IWYU pragma: export
 
 #endif

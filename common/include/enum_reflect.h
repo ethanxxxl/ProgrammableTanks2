@@ -363,17 +363,23 @@
 #define GENERATE_ENUM(ENUM) ENUM,
 #define _GENERATE_STRING(STRING) #STRING,
 
-/** This macro will define both an enum and a list of strings that reflect the
-    names of the enumeration.
+/** This macro will create a string array of the passed, and each argument.
 
     Usage: 
     ```
-    REFLECT_ENUM(toks,
+    // in header file:
+    #define ENUM_ELEMENTS 
         TOKEN1,
         TOKEN2,
         TOKEN3,
         TOKEN4,
-        TOKEN5)
+        TOKEN5
+
+    enum some_enum {ENUM_ELEMENTS};
+    const char *g_reflected_some_enum[];
+
+    // in source file
+    REFLECT_ENUM(some_enum, ENUM_ELEMENTS)
     ```
 
     The string array will be `const char *g_reflected_toks[5]`
@@ -385,8 +391,10 @@
     code, run the interactive functions.  They will insert the code where the
     cursor is at.
 */
-#define REFLECT_ENUM(name, ...) \
-    enum name { __VA_ARGS__ }; \
-    const char *g_reflected_##name[] = {FOREACH(_GENERATE_STRING, __VA_ARGS__)};
+#define REFLECT_ENUM(name, ...)                                                \
+  const char *g_reflected_##name[] = {FOREACH(_GENERATE_STRING, __VA_ARGS__)};
+
+#define IMPL_ENUM_REFLECTION()
+
 
 #endif

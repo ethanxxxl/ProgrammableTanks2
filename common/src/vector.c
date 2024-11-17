@@ -25,6 +25,8 @@ struct vector {
     size_t len;
 };
 
+IMPL_RESULT_TYPE_CUSTOM(vector *, vec)
+
 struct vector* make_vector(size_t elem_len, size_t size_hint) {
     struct vector* vec = malloc(sizeof(struct vector));
     if (vec == NULL)

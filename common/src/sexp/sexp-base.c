@@ -7,6 +7,14 @@
 #include <string.h>
 #include <stdbool.h>
 
+IMPL_RESULT_TYPE_CUSTOM(struct sexp *, sexp)
+REFLECT_ENUM(sexp_reader_error_code, READER_ERROR_CODE_ENUM_VALUES)
+
+const struct error_ops SEXP_READER_ERROR_OPS = {
+    .describe = describe_sexp_reader_error,
+    .free = free_sexp_reader_error,
+};
+
 struct result_sexp reader_err(enum sexp_reader_error_code code,
                               const char *input,
                               const char* location) {

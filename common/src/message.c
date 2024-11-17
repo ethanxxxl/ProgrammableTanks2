@@ -4,6 +4,7 @@
 #include "message.h"
 #include "vector.h"
 #include "nonstdint.h"
+#include "enum_reflect.h"
 
 #include <fcntl.h>
 #include <netinet/in.h>
@@ -14,6 +15,14 @@
 #include <string.h>
 #include <sys/socket.h>
 #include <unistd.h>
+
+REFLECT_ENUM(message_type, MESSAGE_TYPE_ENUM_VALUES)
+
+IMPL_RESULT_TYPE_CUSTOM(enum message_type, message_type) 
+IMPL_RESULT_TYPE_CUSTOM(enum message_status, message_status)
+IMPL_RESULT_TYPE_CUSTOM(struct user_credentials, user_credentials)
+IMPL_RESULT_TYPE_CUSTOM(struct player_update, player_update)   
+IMPL_RESULT_TYPE_CUSTOM(struct scenario_tick, scenario_tick)
 
 void print_hex(const void *data, size_t len) {
     for (char *c = (char *)data, i = 1; c < (char *)data + len; c++, i++) {

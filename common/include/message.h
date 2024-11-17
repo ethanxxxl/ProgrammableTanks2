@@ -3,8 +3,6 @@
 
 #include "error.h"
 #include "scenario.h"
-#include "sexp.h"
-#include "enum_reflect.h"
 
 #include <stdint.h>
 #include <vector.h>
@@ -21,33 +19,30 @@
 ///
 /// Response messages are generally SUCCESS, FAIL, or INVALID.
 /// These messages include display/status text in the message body.
-REFLECT_ENUM(message_type,
-             // IDLE STATE REQUESTS
-             MSG_REQUEST_AUTHENTICATE,
+#define MESSAGE_TYPE_ENUM_VALUES                                               \
+      /* IDLE STATE REQUESTS */                                                \
+      MSG_REQUEST_AUTHENTICATE,                                                \
+                                                                               \
+      /* LOBBY STATE REQUESTS */                                               \
+      MSG_REQUEST_LIST_SCENARIOS, MSG_REQUEST_CREATE_SCENARIO,                 \
+      MSG_REQUEST_JOIN_SCENARIO,                                               \
+                                                                               \
+      /* SCENARIO STATE REQUESTS */                                            \
+      MSG_REQUEST_PLAYER_UPDATE, MSG_REQUEST_RETURN_TO_LOBBY,                  \
+                                                                               \
+      /* MISC REQUESTS */                                                      \
+      MSG_REQUEST_DEBUG, MSG_REQUEST_NULL, /* not an actual message type */    \
+                                                                               \
+      /* RESPONSES */                                                          \
+      MSG_RESPONSE_SCENARIO_TICK, MSG_RESPONSE_STATUS,                         \
+                                                                               \
+      MSG_RESPONSE_NULL, /* not an actual message type */                      \
+                                                                               \
+      MSG_NULL
 
-             // LOBBY STATE REQUESTS
-             MSG_REQUEST_LIST_SCENARIOS,
-             MSG_REQUEST_CREATE_SCENARIO,
-             MSG_REQUEST_JOIN_SCENARIO,
-
-             // SCENARIO STATE REQUESTS
-             MSG_REQUEST_PLAYER_UPDATE,
-             MSG_REQUEST_RETURN_TO_LOBBY,
-
-             // MISC REQUESTS
-             MSG_REQUEST_DEBUG,
-             MSG_REQUEST_NULL, // not an actual message type
-
-             // RESPONSES
-             MSG_RESPONSE_SCENARIO_TICK,
-             MSG_RESPONSE_STATUS,
-             
-             MSG_RESPONSE_NULL, // not an actual message type
-             
-             MSG_NULL)
-
-DEFINE_RESULT_TYPE_CUSTOM(enum message_type, message_type)
-
+enum message_type { MESSAGE_TYPE_ENUM_VALUES };
+extern const char *g_reflected_message_type[];
+DECLARE_RESULT_TYPE_CUSTOM(enum message_type, message_type)
 
 struct result_sexp make_message(enum message_type type);
 void message_send(int fd, const struct sexp *message);
@@ -77,7 +72,7 @@ enum message_status {
   MESSAGE_STATUS_INVALID_MESSAGE,
 };
 
-DEFINE_RESULT_TYPE_CUSTOM(enum message_status, message_status)
+DECLARE_RESULT_TYPE_CUSTOM(enum message_status, message_status)
 
 struct result_sexp make_status_message(enum message_status status);
 struct result_message_status  unwrap_status_message(const sexp *msg);
@@ -92,7 +87,7 @@ struct user_credentials {
     struct vector* password;
 };
 
-DEFINE_RESULT_TYPE_CUSTOM(struct user_credentials, user_credentials)
+DECLARE_RESULT_TYPE_CUSTOM(struct user_credentials, user_credentials)
 
 struct result_sexp
 make_user_credentials_message(const struct user_credentials *creds);
@@ -110,7 +105,7 @@ struct player_update {
     struct vector* tank_instructions;
 };
 
-DEFINE_RESULT_TYPE_CUSTOM(struct player_update, player_update)
+DECLARE_RESULT_TYPE_CUSTOM(struct player_update, player_update)
 
 struct result_sexp
 make_player_update_message(const struct player_update *player_update);
@@ -127,7 +122,7 @@ struct scenario_tick {
     struct vector* players_public_data;
 };
 
-DEFINE_RESULT_TYPE_CUSTOM(struct scenario_tick, scenario_tick)
+DECLARE_RESULT_TYPE_CUSTOM(struct scenario_tick, scenario_tick)
 
 struct result_sexp make_scenario_tick_message(const struct scenario_tick *tick);
 struct result_scenario_tick unwrap_scenario_tick_message(const sexp *msg);
