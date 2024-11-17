@@ -22,11 +22,11 @@
 */
 struct result_sexp sexp_list(struct result_sexp sexp, ...);
 
-void sexp_setcar(sexp *dst, sexp *car);
-void sexp_rsetcar(struct result_sexp dst, struct result_sexp car);
+struct result_sexp sexp_setcar(sexp *dst, sexp *car);
+struct result_sexp sexp_rsetcar(struct result_sexp dst, struct result_sexp car);
 
-void sexp_setcdr(sexp *dst, sexp *cdr);
-void sexp_rsetcdr(struct result_sexp dst, struct result_sexp cdr);
+struct result_sexp  sexp_setcdr(sexp *dst, sexp *cdr);
+struct result_sexp sexp_rsetcdr(struct result_sexp dst, struct result_sexp cdr);
 
 struct result_sexp sexp_car(const sexp *sexp);
 struct result_sexp sexp_rcar(struct result_sexp sexp);

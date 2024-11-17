@@ -126,4 +126,13 @@ DECLARE_RESULT_TYPE_CUSTOM(u8, void)
       var = _r.ok;                                                             \
   }
 
+/** Reduces boilerplate and temp variables, like RESULT_UNWRAP, except when the
+    non-error return value of the function is not used. */
+#define RESULT_CALL(ret_type, ...) \
+    { \
+        auto _r = __VA_ARGS__; \
+        if (_r.status == RESULT_ERROR) \
+            return result_##ret_type##_error(_r.error); \
+    }
+
 #endif

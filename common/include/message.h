@@ -45,7 +45,7 @@ extern const char *g_reflected_message_type[];
 DECLARE_RESULT_TYPE_CUSTOM(enum message_type, message_type)
 
 struct result_sexp make_message(enum message_type type);
-void message_send(int fd, const struct sexp *message);
+struct result_s32  message_send(int fd, const struct sexp *message);
 struct result_sexp message_recv(int fd, struct vector *buf);
 
 /** Return the type of the message. */
@@ -64,6 +64,8 @@ struct result_str unwrap_text_message(const sexp *msg);
    - SUCCESS
    - FAIL
    - INVALID_MESSAGE
+
+   may include an optional brief message description.
 */
 
 enum message_status {
@@ -76,7 +78,7 @@ DECLARE_RESULT_TYPE_CUSTOM(enum message_status, message_status)
 
 struct result_sexp make_status_message(enum message_status status);
 struct result_message_status  unwrap_status_message(const sexp *msg);
-struct result_s32 message_status_send(int fd, enum message_status status, const char *brief);
+struct result_s32 message_status_send(int fd, enum message_status status, char *brief);
 
 /* USER_CREDENTIALS
  *

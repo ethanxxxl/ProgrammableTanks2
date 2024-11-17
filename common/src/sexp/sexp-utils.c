@@ -1,13 +1,97 @@
 #include "sexp/sexp-utils.h"
 #include "error.h"
 #include "sexp/sexp-base.h"
+#include "sexp/sexp-io.h"
 
-#include <ctype.h>
 #include <stddef.h>
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
+
+struct result_sexp sexp_setcar(sexp *dst, sexp *car) {
+    if (dst->is_linear == true)
+        return RESULT_MSG_ERROR(sexp, "Not Implmented for linear sexp");
+    
+    if (dst->sexp_type != SEXP_CONS)
+        return RESULT_MSG_ERROR(sexp, "dst is not a cons");
+
+    ((union sexp_data *)dst->data)->cons.car = car;
+
+    return result_sexp_ok(dst);
+}
+struct result_sexp sexp_rsetcar(struct result_sexp dst, struct result_sexp car) {
+    // FIXME what if they are both errors? this could be a memory leak.
+    if (dst.status == RESULT_ERROR && car.status == RESULT_ERROR)
+        // combine errors somehow?
+        return RESULT_MSG_ERROR(sexp, "error in both dst and car! potential memory leak!");
+
+    if (dst.status == RESULT_ERROR)
+        return dst;
+    if (car.status == RESULT_ERROR)
+        return car;
+
+    return sexp_setcar(dst.ok, car.ok);
+}
+
+struct result_sexp sexp_setcdr(sexp *dst, sexp *cdr) {
+    if (dst->is_linear == true)
+        return RESULT_MSG_ERROR(sexp, "Not Implmented for linear sexp");
+    
+    if (dst->sexp_type != SEXP_CONS)
+        return RESULT_MSG_ERROR(sexp, "dst is not a cons");
+
+    ((union sexp_data *)dst->data)->cons.cdr = cdr;
+
+    return result_sexp_ok(dst);
+}
+struct result_sexp sexp_rsetcdr(struct result_sexp dst, struct result_sexp cdr) {
+    // FIXME what if they are both errors? this could be a memory leak.
+    if (dst.status == RESULT_ERROR && cdr.status == RESULT_ERROR)
+        // combine errors somehow?
+        return RESULT_MSG_ERROR(sexp, "error in both dst and cdr! potential memory leak!");
+
+    if (dst.status == RESULT_ERROR)
+        return dst;
+    if (cdr.status == RESULT_ERROR)
+        return cdr;
+
+    return sexp_setcar(dst.ok, cdr.ok);
+}
+
+struct result_sexp sexp_car(const sexp *sexp) {
+    if (sexp->is_linear == true)
+        return RESULT_MSG_ERROR(sexp, "Not Implemented for linear sexp");
+
+    if (sexp->sexp_type != SEXP_CONS)
+        return RESULT_MSG_ERROR(sexp, "sexp is not a cons");
+
+    return result_sexp_ok(((union sexp_data *)sexp->data)->cons.car);
+}
+
+struct result_sexp sexp_rcar(struct result_sexp sexp) {
+    if (sexp.status == RESULT_ERROR)
+        return sexp;
+
+    return sexp_car(sexp.ok);
+}
+
+struct result_sexp sexp_cdr(const sexp *sexp) {
+    if (sexp->is_linear == true)
+        return RESULT_MSG_ERROR(sexp, "Not Implemented for linear sexp");
+
+    if (sexp->sexp_type != SEXP_CONS)
+        return RESULT_MSG_ERROR(sexp, "sexp is not a cons");
+
+    return result_sexp_ok(((union sexp_data *)sexp->data)->cons.cdr);
+}
+
+struct result_sexp sexp_rcdr(struct result_sexp sexp) {
+    if (sexp.status == RESULT_ERROR)
+        return sexp;
+
+    return sexp_cdr(sexp.ok);
+}
 
 struct result_s32 sexp_int_val(const sexp *s) {
     if (sexp_is_nil(s) || s->sexp_type != SEXP_INTEGER)
@@ -192,27 +276,21 @@ sexp_length(const sexp *s) {
 }
 
 struct result_sexp _sexp_push_data(sexp *list, enum sexp_type type, void* data) {
-    struct result_sexp r = sexp_last(list);
-    if (r.status == RESULT_ERROR)
-        return r;
-    
-    sexp *end = r.ok;
+    sexp *end;
+    RESULT_UNWRAP(sexp, end, sexp_last(list));
 
     enum sexp_memory_method mem_method = list->is_linear ?
         SEXP_MEMORY_LINEAR : SEXP_MEMORY_TREE;
-    
-    r = make_sexp(SEXP_CONS, mem_method, NULL);
-    if (r.status == RESULT_ERROR)
-        return r;
 
-    sexp_setcdr(end, r.ok);
-    end = r.ok;
+    sexp *new_end;
+    RESULT_UNWRAP(sexp, new_end, make_sexp(SEXP_CONS, mem_method, NULL));
 
-    r = make_sexp(type, mem_method, data);
-    if (r.status == RESULT_ERROR)
-        return r;
+    RESULT_CALL(sexp, sexp_setcdr(end, new_end));
 
-    sexp_setcar(end, r.ok);
+    sexp *new_item;
+    RESULT_UNWRAP(sexp, new_item, make_sexp(type, mem_method, data));
+
+    RESULT_CALL(sexp, sexp_setcar(end, new_item));
     return result_sexp_ok(end);
 }
 
@@ -228,6 +306,12 @@ struct result_sexp sexp_push_symbol(sexp *list, const char *sym) {
     return _sexp_push_data(list, SEXP_SYMBOL, (void*)sym);
 }
 
+struct result_sexp sexp_push_tag(sexp *list) {
+    (void)list;
+    return RESULT_MSG_ERROR(sexp, "Not Implemented");
+}
+
+
 struct result_sexp sexp_tag_get_tag(const sexp *s) {
     (void)s;
     return RESULT_MSG_ERROR(sexp, "not implemented");
@@ -238,3 +322,29 @@ struct result_sexp sexp_tag_get_atom(const sexp *s) {
     return RESULT_MSG_ERROR(sexp, "not implemented");
 }
 
+
+struct result_sexp sexp_push(sexp *list, sexp *item) {
+    if (list->is_linear || item->is_linear)
+        return RESULT_MSG_ERROR(sexp, "Not Implemented for linear sexps");
+
+    sexp *old_end;
+    // add a new element to end of the list.  The original end will be returned.
+    RESULT_UNWRAP(sexp, old_end,
+                  sexp_rsetcdr(sexp_last(list), make_cons_sexp()));
+
+    return sexp_rsetcar(sexp_last(old_end), result_sexp_ok(item));
+
+}
+
+struct result_sexp sexp_rpush(struct result_sexp list, struct result_sexp item) {
+    if (list.status == RESULT_ERROR && item.status == RESULT_ERROR)
+        return RESULT_MSG_ERROR(sexp, "both list and item are errors, potential memory leak!");
+
+    if (list.status == RESULT_ERROR)
+        return list;
+
+    if (item.status == RESULT_ERROR)
+        return item;
+
+    return sexp_push(list.ok, item.ok);
+}

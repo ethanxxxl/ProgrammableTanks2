@@ -2,6 +2,7 @@
 #include "sexp/sexp-utils.h"
 #include "error.h"
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <stddef.h>
 #include <string.h>
@@ -22,6 +23,52 @@ struct result_sexp reader_err(enum sexp_reader_error_code code,
         .status = RESULT_ERROR,
         .error = sexp_reader_error(code, input, location),
     };
+}
+
+void free_sexp_reader_error(void *self) {
+    struct sexp_reader_error *err = self;
+    free(err->input);
+}
+
+struct error sexp_reader_error(enum sexp_reader_error_code code,
+                               const char *input, const char *location) {
+    struct sexp_reader_error *err = malloc(sizeof(struct sexp_reader_error));
+    *err = (struct sexp_reader_error) {
+        .code = code,
+        .input = 0,
+        .location = 0,
+    };
+
+    if (input != NULL) {
+        size_t len = strlen(input);
+        err->input = malloc(len);
+        if (err->input == NULL)
+            goto return_error;
+        
+        memcpy(err->input, input, len);
+        err->location = err->input + (location - input);
+    }
+
+ return_error:
+    return (struct error) {
+        .self = err,
+        .operations = &SEXP_READER_ERROR_OPS
+    };
+}
+
+const char *describe_sexp_reader_error(void *self) {
+    struct sexp_reader_error *err = self;
+
+    char *description;
+    if (err->input == NULL)
+        asprintf(&description, "%s", g_reflected_sexp_reader_error_code[err->code]);
+    else
+        asprintf(&description, "%s\n%s\n%*c^",
+                 g_reflected_sexp_reader_error_code[err->code],
+                 err->input,
+                 (s32)(err->location - err->input), '~');
+
+    return description;
 }
 
 /** size of a linear S-Expression structure
@@ -45,63 +92,26 @@ size_t sexp_linear_size(enum sexp_type type) {
 
 ///////////////////////////////// Initializers /////////////////////////////////
 
-struct result_sexp make_sexp_string(const char *str);
-struct result_sexp make_sexp_symbol(const char *str);
-struct result_sexp make_sexp_integer(s32 num);
-struct result_sexp make_sexp_cons(struct sexp *car, struct sexp *cdr);
-
-struct result_sexp make_sexp_cons(struct sexp *car, struct sexp *cdr) {
-    struct sexp *sexp = malloc(sizeof(struct sexp));
-    if (sexp == NULL) {
-        return RESULT_MSG_ERROR(sexp, "malloc returned NULL");
-    }
-
-    (void)car;
-    (void)cdr;
-
-    sexp->sexp_type = SEXP_CONS;
-    // sexp->cons.car = car;
-    // sexp->cons.cdr = cdr;
-    return result_sexp_ok(sexp);
+struct result_sexp make_string_sexp(const char *str) {
+    return make_sexp(SEXP_STRING, SEXP_MEMORY_TREE, (void *)str);
+}
+struct result_sexp make_symbol_sexp(const char *sym) {
+    return make_sexp(SEXP_SYMBOL, SEXP_MEMORY_TREE, (void *)sym);
+}
+struct result_sexp make_integer_sexp(s32 num) {
+    return make_sexp(SEXP_INTEGER, SEXP_MEMORY_TREE, &num);
 }
 
-struct result_sexp make_sexp_integer(s32 num) {
-    struct sexp *sexp = malloc(sizeof(struct sexp));
-    if (sexp == NULL) {
-        return RESULT_MSG_ERROR(sexp, "malloc returned NULL");
-    }
+struct result_sexp make_cons_sexp() {
+    sexp *ret;
+    RESULT_UNWRAP(sexp, ret, make_sexp(SEXP_CONS, SEXP_MEMORY_TREE, NULL));
 
-    (void)num;
+    // setcar and setcdr return the sexp that was modified, so setting ret to
+    // their values will do nothing.
+    RESULT_UNWRAP(sexp, ret, sexp_setcar(ret, NULL));
+    RESULT_UNWRAP(sexp, ret, sexp_setcdr(ret, NULL));
 
-    sexp->sexp_type = SEXP_INTEGER;
-    // sexp->integer = num;
-    return result_sexp_ok(sexp);
-}
-
-struct result_sexp make_sexp_symbol(const char *symbol) {
-    struct result_sexp r = make_sexp_string(symbol);
-    if (r.status == RESULT_ERROR) {
-        return r;
-    }
-    
-    struct sexp *sym = r.ok;
-    
-    sym->sexp_type = SEXP_SYMBOL;
-    return result_sexp_ok(sym);
-}
-
-struct result_sexp make_sexp_string(const char *str) {
-    size_t length = strlen(str);
-    struct sexp *sexp = malloc(sizeof(struct sexp) + length);
-    if (sexp == NULL) {
-        return RESULT_MSG_ERROR(sexp, "malloc returned NULL");
-    }
-
-    sexp->sexp_type = SEXP_STRING;
-    memcpy(sexp->data, str, length);
-    sexp->data_length = length;
-
-    return result_sexp_ok(sexp);
+    return result_sexp_ok(ret);
 }
 
 // TODO implement this
@@ -110,6 +120,7 @@ struct sexp *make_tag(void) {
 }
 
 void free_sexp(struct sexp *sexp) {
+    // FIXME what if this is a linear sexp?
     if (sexp->sexp_type == SEXP_CONS) {
         struct cons cons = *(struct cons *)sexp->data;
 
@@ -308,6 +319,11 @@ struct result_sexp make_sexp(enum sexp_type type,
         root = malloc(sizeof(struct sexp) + sizeof(union sexp_data));
         if (root == NULL)
             return RESULT_MSG_ERROR(sexp, "malloc returned NULL");
+
+        root->is_root = false;
+        root->is_linear = false;
+        root->data_length = data_len;
+        root->sexp_type = type;
 
         if (data != NULL)
             memcpy(root->data, data, data_len);

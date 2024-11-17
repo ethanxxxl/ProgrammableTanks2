@@ -2,6 +2,7 @@
 #include "error.h"
 #include "scenario.h"
 #include "message.h"
+#include "sexp/sexp-utils.h"
 #include "vector.h"
 #include "nonstdint.h"
 #include "enum_reflect.h"
@@ -12,6 +13,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
 #include <unistd.h>
@@ -83,12 +85,14 @@ struct result_vec coords_sexp_to_vector(sexp *coords) {
     return result_vec_ok(vec);
 }
 
+struct result_s32 message_send(int fd, const sexp *msg) {
+    char *msg_str;
+    RESULT_UNWRAP(s32, msg_str, sexp_serialize(msg));
 
-void message_send(int fd, const sexp *msg) {
-    (void)fd;
-    (void)msg;
+    int bytes_sent = send(fd, msg_str, strlen(msg_str), 0);
 
-    return;
+    free(msg_str);
+    return result_s32_ok(bytes_sent);
 }
 
 struct result_sexp message_recv(int fd, struct vector* buf) {
@@ -134,12 +138,48 @@ struct result_sexp message_recv(int fd, struct vector* buf) {
 #define USE_STRING_HEADER
 struct result_sexp message_make_header(enum message_type type) {
 #ifdef USE_STRING_HEADER
-    return make_string_sexp(g_reflected_message_type[type]);
+    return make_symbol_sexp(g_reflected_message_type[type]);
 #else
     return make_integer_sexp(type);
-
 #endif
-    
+
+}
+
+enum message_type message_get_type(const sexp *msg) {
+    struct error e;
+
+    struct result_sexp type_sym = sexp_nth(msg, 0);
+    if (type_sym.status == RESULT_ERROR) {
+        e = type_sym.error;
+        goto error_condition;
+    }
+
+    if (type_sym.ok->sexp_type == SEXP_SYMBOL) {
+        struct result_str msg_type_str = sexp_str_val(type_sym.ok);
+        if (msg_type_str.status == RESULT_ERROR) {
+            e = msg_type_str.error;
+            goto error_condition;
+        }
+
+        for (int i = 0; i < MSG_NULL; i++) {
+            if (strcmp(msg_type_str.ok, g_reflected_message_type[i]) == 0)
+                return i;
+        }
+    } else if (type_sym.ok->sexp_type == SEXP_INTEGER) {
+        struct result_s32 msg_type = sexp_int_val(type_sym.ok);
+        if (msg_type.status == RESULT_ERROR) {
+            e = msg_type.error;
+            goto error_condition;
+        }
+
+        return msg_type.ok;
+    }
+
+    return MSG_NULL;
+
+ error_condition:
+    free_error(e);
+    return MSG_NULL;
 }
 
 
@@ -176,6 +216,21 @@ struct result_message_status unwrap_status_message(const sexp *msg) {
         return result_message_status_error(r.error);
 }
 
+struct result_s32 message_status_send(int fd, enum message_status status, char *brief) {
+    sexp *msg;
+    RESULT_UNWRAP(s32, msg, make_status_message(status));
+
+    // add an optional brief description
+    if (msg != NULL)
+        RESULT_CALL(s32, sexp_push_string(msg, brief));
+
+    struct result_s32 r = message_send(fd, msg);
+
+    free_sexp(msg);
+
+    return r;
+}
+
 /********************* User Credentials Message Functions *********************/
 struct result_sexp
 make_user_credentials_message(const struct user_credentials *creds) {
@@ -207,6 +262,7 @@ unwrap_user_credentials_message(const sexp *msg) {
 
     return result_user_credentials_ok(creds);
 }
+
 
 /********************** Player Update Message Functions ***********************/
 struct result_sexp
