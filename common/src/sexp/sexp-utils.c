@@ -1,13 +1,44 @@
 #include "sexp/sexp-utils.h"
 #include "error.h"
 #include "sexp/sexp-base.h"
-#include "sexp/sexp-io.h"
 
 #include <stddef.h>
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
+
+        
+// FIXME create compound errors. If there are multiple errors, return
+// them all, not just the first one that is encountered.
+struct result_sexp sexp_list(struct result_sexp first, ...) {
+    va_list args;
+    va_start(args, first);
+
+    // an error either in first or list initialization will be handled in the
+    // first iteration of the loop.
+    struct result_sexp root = sexp_rsetcar(make_cons_sexp(), first);
+    struct result_sexp current_element = root;
+
+    struct result_sexp item;
+    while (item = va_arg(args, struct result_sexp),
+           sexp_is_nil(item.ok) == false) {
+
+        current_element = sexp_rpush(current_element, item);
+        if (current_element.status == RESULT_ERROR) 
+            goto error_occured;
+    }
+
+    va_end(args);
+    return root;
+
+ error_occured:
+    va_end(args);
+
+    if (root.status == RESULT_OK)
+        free_sexp(root.ok);
+    return current_element;
+}
 
 struct result_sexp sexp_setcar(sexp *dst, sexp *car) {
     if (dst->is_linear == true)
@@ -347,4 +378,8 @@ struct result_sexp sexp_rpush(struct result_sexp list, struct result_sexp item) 
         return item;
 
     return sexp_push(list.ok, item.ok);
+}
+
+struct result_sexp sexp_nil() {
+    return result_sexp_ok(NULL);
 }

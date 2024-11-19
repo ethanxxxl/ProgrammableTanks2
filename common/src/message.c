@@ -186,7 +186,8 @@ enum message_type message_get_type(const sexp *msg) {
 /*************************** Text Message Functions ***************************/
 struct result_sexp make_text_message(const char *message) {
     return sexp_list(message_make_header(MSG_REQUEST_DEBUG),
-                     make_string_sexp(message));
+                     make_string_sexp(message),
+                     sexp_nil());
 }
 
 struct result_str unwrap_text_message(const sexp *msg) {
@@ -201,7 +202,8 @@ struct result_str unwrap_text_message(const sexp *msg) {
 /************************** Status Message Functions **************************/
 struct result_sexp make_status_message(enum message_status status) {
     return sexp_list(message_make_header(MSG_RESPONSE_STATUS),
-                     make_integer_sexp(status));
+                     make_integer_sexp(status),
+                     sexp_nil());
 }
 
 struct result_message_status unwrap_status_message(const sexp *msg) {
@@ -236,7 +238,8 @@ struct result_sexp
 make_user_credentials_message(const struct user_credentials *creds) {
     return sexp_list(message_make_header(MSG_REQUEST_AUTHENTICATE),
                      make_string_sexp(vec_dat(creds->username)),
-                     make_string_sexp(vec_dat(creds->password)));
+                     make_string_sexp(vec_dat(creds->password)),
+                     sexp_nil());
 }
 
 struct result_user_credentials
@@ -269,8 +272,8 @@ struct result_sexp
 make_player_update_message(const struct player_update *player_update) {
     return sexp_list(message_make_header(MSG_REQUEST_PLAYER_UPDATE),
                      coords_vec_to_sexp(player_update->tank_target_coords),
-                     coords_vec_to_sexp(player_update->tank_instructions)
-                     );
+                     coords_vec_to_sexp(player_update->tank_instructions),
+                     sexp_nil());
 }
 
 struct result_player_update unwrap_player_update_message(const sexp *msg) {
@@ -325,7 +328,8 @@ struct result_sexp make_scenario_tick_message(const struct scenario_tick *tick) 
 
         struct result_sexp encoded_player_data = 
             sexp_list(make_string_sexp(vec_dat(data->username)),
-                      coords_vec_to_sexp(data->tank_positions));
+                      coords_vec_to_sexp(data->tank_positions),
+                      sexp_nil());
 
         msg = sexp_rpush(msg, encoded_player_data);
     }
