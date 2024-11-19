@@ -175,7 +175,7 @@ struct sexp_reader_error {
 
 struct error sexp_reader_error(enum sexp_reader_error_code, const char *input,
                                const char *locaton);
-const char *describe_sexp_reader_error(void *self);
+char *describe_sexp_reader_error(void *self);
 void free_sexp_reader_error(void *self);
 
 /** Single function to return an error wrapped in a `struct sexp_result type`.

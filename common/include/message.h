@@ -44,7 +44,6 @@ enum message_type { MESSAGE_TYPE_ENUM_VALUES };
 extern const char *g_reflected_message_type[];
 DECLARE_RESULT_TYPE_CUSTOM(enum message_type, message_type)
 
-struct result_sexp make_message(enum message_type type);
 struct result_s32  message_send(int fd, const struct sexp *message);
 struct result_sexp message_recv(int fd, struct vector *buf);
 

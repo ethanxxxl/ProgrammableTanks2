@@ -12,7 +12,7 @@
 
 /***************************** Error Object Type ******************************/
 struct error_ops {
-    const char * (*describe)(void *);
+    char * (*describe)(void *);
     void (*free)(void *);
 };
 
@@ -24,11 +24,11 @@ struct error {
 };
 
 // Helper Functions
-const char *describe_error(const struct error e);
+char *describe_error(const struct error e);
 void free_error(const struct error e);
 
 /******************************* Generic Error ********************************/
-const char *describe_msg_error(void *self);
+char *describe_msg_error(void *self);
 void free_msg_error(void *self);
 
 struct error make_msg_error(const char *fmt, ...);

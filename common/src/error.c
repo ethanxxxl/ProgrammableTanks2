@@ -22,7 +22,8 @@ IMPL_RESULT_TYPE_CUSTOM(void *, voidp)
 IMPL_RESULT_TYPE_CUSTOM(u8, void)
 
 /***************************** Error Object Type ******************************/
-const char *describe_error(const struct error e) {
+/** A printable representation of the error received.  This must be freed.*/
+char *describe_error(const struct error e) {
     if (e.operations->describe != NULL)
         return e.operations->describe(e.self);
     else
@@ -37,14 +38,14 @@ void free_error(const struct error e) {
 
 /******************************* Generic Error ********************************/
 
-const char *describe_msg_error(void *self) {
-    return (char*)self;
+char *describe_msg_error(void *self) {
+    return self;
 }
 
 void free_msg_error(void *self) {
     // if malloc failed while creating this error, self will not be heap memory,
     // which will likely cause a
-    free((char *)self);
+    free(self);
 }
 
 struct error make_msg_error(const char *fmt, ...) {

@@ -56,6 +56,12 @@ struct player_public_data {
 
 struct player_public_data make_player_public_data();
 struct player_public_data player_public_data_get(const struct player_data*);
-void free_player_public_data(struct player_public_data*);
+void free_player_public_data(struct player_public_data *);
 
+/** takes a vector of `struct player_data`, and returns a new vector of `struct
+    player_pubic_data` */
+struct vector *player_public_data_get_all(const struct vector *player_data);
+
+/** frees all the `struct player_public_data` elements in the vector. */
+void free_all_player_public_data(struct vector *player_public_data);
 #endif

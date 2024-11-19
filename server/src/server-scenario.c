@@ -205,20 +205,18 @@ int scenario_handler(struct scenario *scene) {
 
     // send updates to all the players
     // create message to send to players
-    struct result_sexp r = make_message(MSG_RESPONSE_SCENARIO_TICK);
 
-    if (r.status == RESULT_ERROR) {
+    struct vector *public_data = player_public_data_get_all(scene->players);
+    struct scenario_tick tick  = (struct scenario_tick) {
+        .players_public_data = public_data
+    };
+    struct result_sexp msg = make_scenario_tick_message(&tick);
+
+    if (msg.status == RESULT_ERROR) {
         // TODO handle this errror
-        printf("%s", describe_error(r.error));
-        free_error(r.error);
+        printf("%s", describe_error(msg.error));
+        free_error(msg.error);
         return -1;
-    }
-    sexp *msg = r.ok;
-
-    // add public data to the message
-    for (size_t p = 0; p < vec_len(scene->players); p++) {
-        const struct player_data* player = vec_ref(scene->players, p);
-        message_scenario_tick_add_player(&msg, player);
     }
 
     // send the newly created message.        
@@ -232,10 +230,11 @@ int scenario_handler(struct scenario *scene) {
                inet_ntoa(a));
         #endif
 
-        message_send(pm->socket, msg);
+        message_send(pm->socket, msg.ok);
     }
 
-    free_sexp(msg);
+    free_all_player_public_data(public_data);
+    free_sexp(msg.ok);
     
     return 0;
 }

@@ -581,6 +581,7 @@ sexp_serialize_list(const sexp *list, vector *buffer) {
         // Add space between sexp elements
         vec_push(buffer, " ");
 
+
         RESULT_UNWRAP(s32, element, sexp_cdr(element));
         is_nil = false;
     }
@@ -646,4 +647,20 @@ struct result_s32 sexp_fprint(const struct sexp *s, FILE *file){
     free_vector(r.ok);
 
     return result_s32_ok(0);
+}
+
+s32 sexp_print(const struct sexp *s) {
+    struct result_s32 r = 
+        sexp_fprint(s, stdout);
+
+    if (r.status == RESULT_ERROR) {
+        char *msg = describe_error(r.error);
+        puts(msg);
+
+        free(msg);
+        free_error(r.error);
+        return -1;
+    }
+
+    return r.ok;
 }

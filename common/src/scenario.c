@@ -51,3 +51,40 @@ void free_player_public_data(struct player_public_data* public_data) {
     free_vector(public_data->username);
     free_vector(public_data->tank_positions);
 }
+
+struct vector *player_public_data_get_all(const struct vector *player_data) {
+    if (player_data == NULL)
+        return NULL;
+
+    struct vector *all_pub_data = make_vector(sizeof(struct player_public_data),
+                                          vec_len(player_data));
+    if (all_pub_data == NULL)
+        return NULL;
+
+    for (size_t i = 0; i < vec_len(player_data); i++) {
+        struct player_public_data pub_data =
+            player_public_data_get(vec_ref(player_data, i));
+
+        vec_push(all_pub_data, &pub_data);
+        
+        if (pub_data.tank_positions == NULL || pub_data.username == NULL)
+            goto error_occured;
+    }
+
+    return all_pub_data;
+
+ error_occured:
+    free_all_player_public_data(all_pub_data);
+    return NULL;
+}
+
+void free_all_player_public_data(struct vector *player_public_data) {
+    if (player_public_data == NULL)
+        return;
+    
+    for (size_t i = 0; i < vec_len(player_public_data); i++)
+        free_player_public_data(vec_ref(player_public_data, i));
+
+    free_vector(player_public_data);
+    return;
+}

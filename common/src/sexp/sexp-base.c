@@ -56,7 +56,7 @@ struct error sexp_reader_error(enum sexp_reader_error_code code,
     };
 }
 
-const char *describe_sexp_reader_error(void *self) {
+char *describe_sexp_reader_error(void *self) {
     struct sexp_reader_error *err = self;
 
     char *description;
