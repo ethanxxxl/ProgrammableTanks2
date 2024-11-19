@@ -120,6 +120,9 @@ struct sexp *make_tag(void) {
 }
 
 void free_sexp(struct sexp *sexp) {
+    if (sexp == NULL)
+        return;
+    
     // FIXME what if this is a linear sexp?
     if (sexp->sexp_type == SEXP_CONS) {
         struct cons cons = *(struct cons *)sexp->data;
