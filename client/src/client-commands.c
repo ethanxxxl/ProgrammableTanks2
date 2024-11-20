@@ -1,5 +1,6 @@
 #include "client-commands.h"
 #include "client-gfx.h"
+#include "error.h"
 #include "game-manager.h"
 
 #include "message.h"
@@ -36,9 +37,10 @@ extern struct vector *g_players;
 void *read_msg_thread(void *arg) {
     (void)arg; // arg is unused.
 
+    struct error err;
     g_print_msg = false;
     
-    struct message msg = {0};
+    sexp *msg = NULL;
     struct vector* msg_buf = make_vector(sizeof(char), 30);
     fcntl(g_server_sock, F_SETFL, O_NONBLOCK);
 
@@ -46,107 +48,157 @@ void *read_msg_thread(void *arg) {
         if (!g_server_connected)
             continue;
 
-        int status = message_recv(g_server_sock, &msg, msg_buf);
+        struct result_sexp r = message_recv(g_server_sock, msg_buf);
 
-        if (status < 0)
+        // handle any errors that may have occured during parsing, etc.
+        if (r.status == RESULT_ERROR) {
+            err = r.error;
+            goto handle_error;
+        } else {
+            msg = r.ok;
+        }
+
+        // no message was received, continue to wait for a message.
+        if (msg == NULL)
             continue;
 
-        switch (msg.type) {
+        // a message was received, handle the message.
+        switch (message_get_type(msg)) {
         case MSG_RESPONSE_SCENARIO_TICK: {
-            struct scenario_tick body = msg.scenario_tick;
+            struct scenario_tick tick;
+            struct result_scenario_tick r = unwrap_scenario_tick_message(msg);
 
-            struct player_public_data* pd = vec_dat(body.players_public_data);
-            struct player_public_data* end = vec_end(body.players_public_data);
+            // free resources and restart loop if error occured.
+            if (r.status == RESULT_ERROR) {
+                err = r.error;
+                free_sexp(msg);
+                goto handle_error;
+            } else {
+                tick = r.ok;
+            }
+
+            struct player_public_data* pd = vec_dat(tick.players_public_data);
+            struct player_public_data* end = vec_end(tick.players_public_data);
             for (; pd <= end; pd++) {
                 players_update_player(vec_dat(pd->username), pd->tank_positions);
             }
+
+            free_scenario_tick(tick);
         } break;            
         default:
             break;
         }
 
         if (g_print_msg) {
-            print_message(msg);
+            sexp_print(msg);
         }
         
-        free_message(msg);
-    }
+        free_sexp(msg);
 
-    
+    handle_error:
+        char *err_msg = describe_error(err);
+        puts(err_msg);
+        free(err_msg);
+        free_error(err);
+        continue;
+    }
+        
     free_vector(msg_buf);
     return NULL;
 }
 
-int debug_send_msg(struct message msg) {
-    if (!g_server_connected) {
-        printf("ERROR! you must connect to the server first!\n");
-        return -1;
-    }
+struct result_s32 debug_send_msg(sexp *msg) {
+    if (!g_server_connected)
+        RESULT_MSG_ERROR(s32, "ERROR! you must connect to the server first!\n");
+
     printf("--SENDING--\n");
-    print_message(msg);
+    sexp_print(msg);
+
     return message_send(g_server_sock, msg);
 }
 
-void enable_print_messages(int argc, char **argv) {
-    (void)argc; (void)argv;
+void enable_print_messages(int argc, char **argv, struct error *e) {
+    (void)argc; (void)argv; (void)e;
 
     g_print_msg = !g_print_msg;
 }
 
-void request_server_update(int argc, char **argv) {
-    (void)argc; (void)argv;    
+void request_server_update(int argc, char **argv, struct error *e) {
+    (void)argc; (void)argv; (void)e; (void)e;
     printf("requesting info from server...\n");
-    printf("COMMAND FAILED: NOT IMPLEMENTED\n");
+
+    *e = make_msg_error("Not Implemented");
 }
 
-void authenticate(int argc, char **argv) {
-    (void)argc; (void)argv;
+void authenticate(int argc, char **argv, struct error *e) {
+    (void)argc; (void)argv; (void)e;
 
     if (argc != 2) {
-        printf("ERROR: second argument must be your username.\n");
+        *e = make_msg_error("ERROR: second argument must be your username.\n");
         return;
     }
 
     // copy username into global username tracker.
     memcpy(&g_username, argv[1], strlen(argv[1]));
-    
-    struct message msg;
-    make_message(&msg, MSG_REQUEST_AUTHENTICATE);
-    vec_pushn(msg.user_credentials.username, argv[1], strlen(argv[1]));
-    debug_send_msg(msg);
+
+    const char *username = argv[1];
+    const char *password = NULL;
+    struct result_sexp msg =
+        make_user_credentials_message_str(username, password);
+
+    if (msg.status == RESULT_ERROR) {
+        *e = msg.error;
+        return;
+    }
+
+    debug_send_msg(msg.ok);
+    free_sexp(msg.ok);
 }
-void change_state(int argc, char **argv) {
+
+void change_state(int argc, char **argv, struct error *e) {
     if (argc != 2) {
-    printf("ERROR: valid options are \"scene\" or \"lobby\"\n");
-    return;
+        *e = make_msg_error("ERROR: valid options are \"scene\" or \"lobby\"\n");
+        return;
     }
 
-    struct message msg;
+    struct result_sexp msg;
     if (strcmp(argv[1], "scene") == 0) {
-        make_message(&msg, MSG_REQUEST_JOIN_SCENARIO);
+        msg = make_join_scenario_message("default");
     } else if (strcmp(argv[1], "lobby") == 0) {
-        make_message(&msg, MSG_REQUEST_RETURN_TO_LOBBY);
+        msg = make_return_to_lobby_message();
     } else {
-        printf("ERROR: valid options are \"scene\" or \"lobby\"\n");
-    return;
+        *e = make_msg_error("ERROR: valid options are \"scene\" or \"lobby\"\n");
+        return;
     }
 
-    debug_send_msg(msg);
+    if (msg.status == RESULT_ERROR) {
+        *e = msg.error;
+        return;
+    }
+    
+    debug_send_msg(msg.ok);
+    free_sexp(msg.ok);
     return;
 }
-void list_scenarios(int argc, char **argv) {
+void list_scenarios(int argc, char **argv, struct error *e) {
     (void)argc; (void)argv;
 
-    struct message msg;
-    make_message(&msg, MSG_REQUEST_LIST_SCENARIOS);
+    struct result_sexp msg;
+    msg = make_list_scenarios_message();
+    if (msg.status == RESULT_ERROR) {
+        *e = msg.error;
+        return;
+    }
 
-    debug_send_msg(msg);
+    debug_send_msg(msg.ok);
+    free_sexp(msg.ok);
+    return;
 }
 
-void update_tank(int argc, char **argv) {
-    (void)argc; (void)argv;
+void update_tank(int argc, char **argv, struct error *e) {
+    (void)argc; (void)argv; (void)e;
     if (argc < 3) {
-        printf("ERROR: arguments must be: update-tank: IDX X Y\n");
+        *e = make_msg_error("ERROR: arguments must be: update-tank: IDX X Y\n");
         return;
     }
 
@@ -157,7 +209,7 @@ void update_tank(int argc, char **argv) {
         if (strcmp(player.username, g_username) == 0)
             goto update_tank_send_update;
     }
-    printf("ERROR: you don't have any tanks to update!\n");
+    *e = make_msg_error("ERROR: you don't have any tanks to update!\n");
     return;
     
  update_tank_send_update:;
@@ -166,7 +218,7 @@ void update_tank(int argc, char **argv) {
     int y = atoi(argv[3]);
 
     if (index < 0 || index >= (int)vec_len(player.tanks)) {
-        printf("ERROR: you must index a valid tank!\n");
+        *e = make_msg_error("ERROR: you must index a valid tank!\n");
         return;
     }
     
@@ -176,8 +228,8 @@ void update_tank(int argc, char **argv) {
     return;
  }
 
-void propose_update(int argc, char **argv) {
-    (void)argc;
+void propose_update(int argc, char **argv, struct error *e) {
+    (void)argc; (void)e;
     (void)argv;
 
     // find yourself in player list
@@ -187,31 +239,45 @@ void propose_update(int argc, char **argv) {
         if (strcmp(player.username, g_username) == 0)
             goto propose_update_tank_send_update;
     }
-    printf("ERROR: you don't have any tanks to update!\n");
+    *e = make_msg_error("ERROR: you don't have any tanks to update!\n");
     return;
 
- propose_update_tank_send_update:;
-    struct message msg;
-    make_message(&msg, MSG_REQUEST_PLAYER_UPDATE);
-
+ propose_update_tank_send_update:
+    // FIXME make_vector could fail here.
+    struct player_update update = {
+        .tank_instructions = make_vector(sizeof(enum tank_command),
+                                         vec_len(player.tanks)),
+        .tank_target_coords = make_vector(sizeof(struct coord),
+                                          vec_len(player.tanks)),
+    };
+    
     for (size_t t = 0; t < vec_len(player.tanks); t++) {
         struct tank tank;
         vec_at(player.tanks, t, &tank);
-        
+
         enum tank_command cmd = TANK_MOVE;
-           
-        vec_push(msg.player_update.tank_instructions, &cmd);
-        vec_push(msg.player_update.tank_target_coords, &tank.move_to);
+
+        vec_push(update.tank_instructions, &cmd);
+        vec_push(update.tank_target_coords, &tank.move_to);
     }
 
-    debug_send_msg(msg);
+    struct result_sexp msg;
+    msg = make_player_update_message(&update);
 
-    free_message(msg);
+    if (msg.status == RESULT_ERROR) {
+        *e = msg.error;
+        free_vector(update.tank_instructions);
+        free_vector(update.tank_target_coords);
+        return;
+    }
+
+    debug_send_msg(msg.ok);
+    free_sexp(msg.ok);
     return;
 }
 
-void list_tanks(int argc, char **argv) {
-    (void)argc; (void)argv;    
+void list_tanks(int argc, char **argv, struct error *e) {
+    (void)argc; (void)argv;     (void)e;
     for (size_t p = 0; p < vec_len(g_players); p++) {
         struct player *player = vec_ref(g_players, p);
         printf("[tanks for %s]\n", player->username);
@@ -222,41 +288,49 @@ void list_tanks(int argc, char **argv) {
     }
 }
 
-void message_server(int argc, char **argv) {
-    struct message msg;
-    make_message(&msg, MSG_REQUEST_DEBUG);
-    msg.text = make_vector(sizeof(char), 50);
-
+void message_server(int argc, char **argv, struct error *e) {
+    vector *txt = make_vector(sizeof(char), 50);
     for (int i = 1; i < argc; i++) {
-        vec_pushn(msg.text, argv[i], strlen(argv[i]));
-        vec_push(msg.text, " ");
+        vec_pushn(txt, argv[i], strlen(argv[i]));
+        vec_push(txt, " ");
     }
-    vec_push(msg.text, "\0");
+    vec_push(txt, "\0");
 
-    debug_send_msg(msg);
+    struct result_sexp msg;
+    msg = make_text_message(vec_dat(txt));
+    free_vector(txt);
+    
+    if (msg.status == RESULT_ERROR) {
+        *e = msg.error;
+        return;
+    }
+    
+    debug_send_msg(msg.ok);
+    free_sexp(msg.ok);
+    return;
 }
 
-void quit(int argc, char **argv) {
-    (void)argc; (void)argv;    
+void quit(int argc, char **argv, struct error *e) {
+    (void)argc; (void)argv; (void)e;
     g_run_program = false;
 }
 
-void dummy(int argc, char **argv) {
-    (void)argc; (void)argv;    
+void dummy(int argc, char **argv, struct error *e) {
+    (void)argc; (void)argv; (void)e;
 }
 
-void change_bg_color(int argc, char **argv) {
+void change_bg_color(int argc, char **argv, struct error *e) {
     if (argc != 2) {
-        printf("ERROR: there may only be a single argument to this function\n");
+        *e = make_msg_error("ERROR: there may only be a single argument to this function\n");
         return;
     }
 
     g_bg_color = atoi(argv[1]);
 }
 
-void connect_serv(int argc, char **argv) {
-    if (argc > 2) {
-        printf("ERROR: there shouldn't be more than one parameter!\n");
+void connect_serv(int argc, char **argv, struct error *e) {
+    if (argc > 2) { 
+        *e = make_msg_error("ERROR: there shouldn't be more than one parameter!\n");
         return;
     }
 
@@ -274,7 +348,7 @@ void connect_serv(int argc, char **argv) {
         // create a socket
     g_server_sock = socket(PF_INET, SOCK_STREAM, 0);
     if (g_server_sock < 0) {
-        printf("ERROR: failed to open network socket\n");
+        *e = make_msg_error("ERROR: failed to open network socket\n");
         return;
     }
 
@@ -288,7 +362,7 @@ void connect_serv(int argc, char **argv) {
              (struct sockaddr*) &name,
              sizeof(name));
     if (status < 0) {
-        printf("ERROR: couldn't connect to server.\n");
+        *e = make_msg_error("ERROR: couldn't connect to server.\n");
         return;
     }
 
@@ -299,12 +373,12 @@ void connect_serv(int argc, char **argv) {
            NULL);
 
     g_server_connected = true;
-    printf("connected to server on %s:%d\n", address, port);
+    *e = make_msg_error("connected to server on %s:%d\n", address, port);
     return;
 }
 
-void start_gfx(int argc, char **argv) {
-    (void)argc; (void)argv;    
+void start_gfx(int argc, char **argv, struct error *e) {
+    (void)argc; (void)argv; (void)e;
     pthread_create(&g_gfx_pid,
                    NULL,
                    &gfx_thread,

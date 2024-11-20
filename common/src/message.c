@@ -242,6 +242,14 @@ make_user_credentials_message(const struct user_credentials *creds) {
                      sexp_nil());
 }
 
+struct result_sexp
+make_user_credentials_message_str(const char *username, const char *password) {
+    return sexp_list(message_make_header(MSG_REQUEST_AUTHENTICATE),
+                     make_string_sexp(username),
+                     make_string_sexp(password),
+                     sexp_nil());
+}
+
 struct result_user_credentials
 unwrap_user_credentials_message(const sexp *msg) {
     struct user_credentials creds;
@@ -316,6 +324,10 @@ struct result_player_update unwrap_player_update_message(const sexp *msg) {
                  (USERNAME3 (X Y X Y X Y ...))
                  ...)
  */
+
+void free_scenario_tick(struct scenario_tick tick) {
+    free_vector(tick.players_public_data);
+}
  
 struct result_sexp make_scenario_tick_message(const struct scenario_tick *tick) {
     sexp *msg_root;
@@ -375,4 +387,17 @@ struct result_scenario_tick unwrap_scenario_tick_message(const sexp *msg) {
     }
 
     return result_scenario_tick_ok(tick);
+}
+
+struct result_sexp make_join_scenario_message(const char *scenario_name) {
+    return sexp_list(message_make_header(MSG_REQUEST_JOIN_SCENARIO),
+                     make_string_sexp(scenario_name),
+                     sexp_nil());  
+}
+
+struct result_sexp make_return_to_lobby_message() {
+    return message_make_header(MSG_REQUEST_RETURN_TO_LOBBY);
+}
+struct result_sexp make_list_scenarios_message() {
+    return message_make_header(MSG_REQUEST_LIST_SCENARIOS);
 }

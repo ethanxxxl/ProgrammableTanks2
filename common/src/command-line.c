@@ -1,4 +1,5 @@
 #include "command-line.h"
+#include "sexp/sexp-base.h"
 #include "vector.h"
 
 #include <ctype.h>
@@ -176,16 +177,25 @@ void try_call_command(const struct command_line_args* env,
     size_t i = 0;
     for (; (strcmp(cmd_list[i].name, argv[0]) != 0) && i < num_cmds; i++);
 
+    struct error e = {0};
     // run the associated callback (implicit help command)
     if (i < num_cmds) {
-        cmd_list[i].callback(argc, argv);                
+        cmd_list[i].callback(argc, argv, &e);                
     } else if (strcmp(argv[0], "help") == 0) {
         help_command(env, argc, argv);
     } else {
         printf("ERROR: Unknown Command \"%s\"\n", argv[0]);
     }
-}
 
+    // if either of these is no longer zero, then the command must have
+    // encountered an error.
+    if (e.operations != 0 || e.self != 0) {
+        char *err_msg = describe_error(e);
+        printf("\033[31m--COMMAND ERROR--\n%s\033[0m\n", err_msg);
+        free(err_msg);
+        free_error(e);
+    }
+}
 
 void* command_line_thread(void* a) {
     struct command_line_args* env = a;

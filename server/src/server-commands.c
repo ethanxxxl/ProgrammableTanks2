@@ -2,7 +2,6 @@
 #include "stdbool.h"
 
 const struct command server_commands[] = {
-    {"q", &cmd_quit},
     {"quit", &cmd_quit},
 };
 
@@ -15,9 +14,10 @@ struct command_line_args server_command_line_args = {
     .run_program = &g_run_server
 };
 
-void cmd_quit(int argc, char** argv) {
+void cmd_quit(int argc, char** argv, struct error *e) {
     (void)argc;
     (void)argv;
+    (void)e;
     
     g_run_server = false;
 }

@@ -69,9 +69,7 @@ struct command COMMANDS[] = {
     {"debug-messages", &enable_print_messages},
 
     //{"\n", &dummy},
-    {"q", &quit},
     {"quit", &quit},
-    {"exit", &quit},
 };
 
 struct command_line_args COMMAND_LINE_ENVIRONMENT = {

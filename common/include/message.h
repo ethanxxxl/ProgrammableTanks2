@@ -93,6 +93,9 @@ DECLARE_RESULT_TYPE_CUSTOM(struct user_credentials, user_credentials)
 struct result_sexp
 make_user_credentials_message(const struct user_credentials *creds);
 
+struct result_sexp
+make_user_credentials_message_str(const char* username, const char *password);
+
 struct result_user_credentials
 unwrap_user_credentials_message(const sexp *msg);
 
@@ -123,10 +126,21 @@ struct scenario_tick {
     struct vector* players_public_data;
 };
 
+void free_scenario_tick(struct scenario_tick tick);
+
 DECLARE_RESULT_TYPE_CUSTOM(struct scenario_tick, scenario_tick)
 
 struct result_sexp make_scenario_tick_message(const struct scenario_tick *tick);
 struct result_scenario_tick unwrap_scenario_tick_message(const sexp *msg);
 void message_scenario_tick_add_player(sexp **msg, const struct player_data* pd);
+
+/* JOIN SCENARIO
+ * (JOIN-SCENARIO scenario-name)
+ */
+
+struct result_sexp make_join_scenario_message(const char *scenario_name);
+struct result_sexp make_return_to_lobby_message();
+struct result_sexp make_list_scenarios_message();
+struct result_sexp make_create_scenario_message();
 
 #endif

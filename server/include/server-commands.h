@@ -3,7 +3,7 @@
 
 #include "command-line.h"
 
-void cmd_quit(int, char**);
+command_fn cmd_quit;
 
 extern bool g_run_server;
 

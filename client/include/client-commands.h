@@ -1,28 +1,27 @@
 #ifndef CLIENT_COMMANDS_H
 #define CLIENT_COMMANDS_H
 
-#include "message.h"
+#include "sexp.h"
+#include "command-line.h"
 
-void connect_serv(int argc, char** argv);
-void start_gfx(int argc, char** argv);
-void list_tanks(int argc, char** argv);
-void propose_update(int argc, char** argv);
-void update_tank(int argc, char** argv);
-void request_server_update(int argc, char** argv);
-void authenticate(int argc, char** argv);
-void change_state(int argc, char** argv);
-void list_scenarios(int argc, char** argv);
+command_fn connect_serv;
+command_fn start_gfx;
+command_fn list_tanks;
+command_fn propose_update;
+command_fn update_tank;
+command_fn request_server_update;
+command_fn authenticate;
+command_fn change_state;
+command_fn list_scenarios;
 
-void message_server(int argc, char** argv);
-void change_bg_color(int argc, char** argv);
+command_fn message_server;
+command_fn change_bg_color;
 
-void enable_print_messages(int argc, char** argv);
+command_fn enable_print_messages;
 
-void dummy(int argc, char** argv);
-void quit(int argc, char** argv);
-void quit(int argc, char** argv);
-void quit(int argc, char **argv);
+command_fn dummy;
+command_fn quit;
 
-int debug_send_msg(struct message msg);
+struct result_s32 debug_send_msg(sexp *msg);
 
 #endif

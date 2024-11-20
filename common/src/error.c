@@ -39,7 +39,11 @@ void free_error(const struct error e) {
 /******************************* Generic Error ********************************/
 
 char *describe_msg_error(void *self) {
-    return self;
+    size_t len = strlen(self);
+    char *new_str = malloc(len);
+    memcpy(new_str, self, len);
+
+    return new_str;
 }
 
 void free_msg_error(void *self) {
@@ -64,10 +68,12 @@ struct error vmake_msg_error(const char *fmt, va_list args) {
     char *message;
     vasprintf(&message, fmt, args); // calls malloc
 
-    if (message == NULL) {
-        message =
-            "ERROR: malloc returned NULL while trying to return an error!";
-    }
+    // if vasprintf returns NULL, message cannot return a string literal,
+    // because the program would try to free it.
+
+    // the best thing to do is to warn the user about it when it occures.
+    if (message == NULL)
+        printf("CRITICAL ERROR: malloc returned null while creating an error!");
 
     return (struct error) {
         .operations = &MSG_ERROR_OPS,
