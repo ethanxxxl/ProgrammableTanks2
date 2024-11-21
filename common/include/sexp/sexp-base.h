@@ -27,18 +27,19 @@ enum sexp_memory_method {
     type.
 
     The `SEXP_LIST_TERMINATOR` is used as the last element in linear sexp lists.
-    
- */
-enum sexp_type {
-    SEXP_CONS = 0x0,
-    SEXP_SYMBOL = 0x1,
-    SEXP_STRING = 0x2,
-    SEXP_INTEGER = 0x3,
-    SEXP_TAG = 0x4,
 
-    SEXP_LIST_TERMINATOR = 0x5,
-    SEXP_LINEAR_ROOT = 0x6,
-};
+ */
+#define ENUM_SEXP_TYPE_ITEMS                \
+    SEXP_CONS,                              \
+    SEXP_SYMBOL,                            \
+    SEXP_STRING,                            \
+    SEXP_INTEGER,                           \
+    SEXP_TAG,                               \
+    SEXP_LIST_TERMINATOR,                   \
+    SEXP_LINEAR_ROOT
+
+enum sexp_type { ENUM_SEXP_TYPE_ITEMS };
+extern const char *g_reflected_sexp_type[];
 
 /** Fundamental structure for both S-Expression implementations. */
 struct cons {

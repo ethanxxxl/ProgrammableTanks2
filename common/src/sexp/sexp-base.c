@@ -10,7 +10,8 @@
 
 IMPL_RESULT_TYPE_CUSTOM(struct sexp *, sexp)
 REFLECT_ENUM(sexp_reader_error_code, READER_ERROR_CODE_ENUM_VALUES)
-
+REFLECT_ENUM(sexp_type, ENUM_SEXP_TYPE_ITEMS)
+     
 const struct error_ops SEXP_READER_ERROR_OPS = {
     .describe = describe_sexp_reader_error,
     .free = free_sexp_reader_error,
