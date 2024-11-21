@@ -368,14 +368,12 @@ struct result_s32 sexp_serialize_string(const sexp *, vector *);
 /** takes a sexp and dynamic buffer. */
 struct result_s32
 sexp_serialize_any(const sexp *s, vector *buffer) {
-    if (s == NULL)
-        return RESULT_MSG_ERROR(s32, "unexpected NULL sexp");
-
     if (buffer == NULL)
         return RESULT_MSG_ERROR(s32, "unexpected NULL buffer");
 
     struct result_s32 r;
-    switch (s->sexp_type) {
+    switch (sexp_type(s)) {
+    case SEXP_NIL:
     case SEXP_CONS:
         r = sexp_serialize_list(s, buffer);
         break;
@@ -391,6 +389,9 @@ sexp_serialize_any(const sexp *s, vector *buffer) {
     case SEXP_STRING:
         r = sexp_serialize_string(s, buffer);
         break;
+    default:
+        r = result_s32_ok(0);
+        break;
     }
 
     return r;
@@ -398,15 +399,13 @@ sexp_serialize_any(const sexp *s, vector *buffer) {
 
 struct result_s32
 sexp_serialize_symbol(const sexp *sexp, vector *buffer) {
-    if (sexp == NULL)
-        return RESULT_MSG_ERROR(s32, "unexpected NULL sexp");
-
     if (buffer == NULL)
         return RESULT_MSG_ERROR(s32, "unexpected NULL buffer");
 
-    if (sexp->sexp_type != SEXP_SYMBOL)
-        return RESULT_MSG_ERROR(s32, "sexp type is not SEXP_SYMBOL");
-
+    if (sexp_type(sexp) != SEXP_SYMBOL)
+        return RESULT_MSG_ERROR(s32, "sexp type is %s, not SEXP_SYMBOL",
+                                g_reflected_sexp_type[sexp_type(sexp)]);
+                                
     s32 buffer_space = vec_cap(buffer) - vec_len(buffer);
     s32 bytes_written = 0;
 
@@ -434,14 +433,12 @@ sexp_serialize_symbol(const sexp *sexp, vector *buffer) {
 
 struct result_s32
 sexp_serialize_tag(const sexp *sexp, vector *buffer) {
-    if (sexp == NULL)
-        return RESULT_MSG_ERROR(s32, "unexpected NULL sexp");
-
     if (buffer == NULL)
         return RESULT_MSG_ERROR(s32, "unexpected NULL buffer");
 
-    if (sexp->sexp_type != SEXP_TAG)
-        return RESULT_MSG_ERROR(s32, "sexp type is not SEXP_TAG");
+    if (sexp_type(sexp) != SEXP_TAG)
+        return RESULT_MSG_ERROR(s32, "sexp type is %s not SEXP_TAG",
+                                g_reflected_sexp_type[sexp_type(sexp)]);
 
     struct result_sexp r;
     const struct sexp* tag;
@@ -486,14 +483,12 @@ sexp_serialize_tag(const sexp *sexp, vector *buffer) {
     
 struct result_s32
 sexp_serialize_string(const sexp *sexp, vector *buffer) {
-    if (sexp == NULL)
-        return RESULT_MSG_ERROR(s32, "unexpected NULL sexp");
-
     if (buffer == NULL)
         return RESULT_MSG_ERROR(s32, "unexpected NULL buffer");
 
-    if (sexp->sexp_type != SEXP_STRING)
-        return RESULT_MSG_ERROR(s32, "sexp type is not SEXP_STRING");
+    if (sexp_type(sexp) != SEXP_STRING)
+        return RESULT_MSG_ERROR(s32, "sexp type is %s, not SEXP_STRING",
+                                g_reflected_sexp_type[sexp_type(sexp)]);
 
     s32 buffer_space = vec_cap(buffer) - vec_len(buffer);
     s32 bytes_written = 0;
@@ -520,14 +515,12 @@ sexp_serialize_string(const sexp *sexp, vector *buffer) {
 
 struct result_s32
 sexp_serialize_integer(const sexp *sexp, vector *buffer) {
-    if (sexp == NULL)
-        return RESULT_MSG_ERROR(s32, "unexpected NULL sexp");
-
     if (buffer == NULL)
         return RESULT_MSG_ERROR(s32, "unexpected NULL buffer");
 
-    if (sexp->sexp_type != SEXP_INTEGER)
-        return RESULT_MSG_ERROR(s32, "sexp type is not SEXP_INTEGER");
+    if (sexp_type(sexp) != SEXP_INTEGER)
+        return RESULT_MSG_ERROR(s32, "sexp type is %s, not SEXP_INTEGER",
+                                g_reflected_sexp_type[sexp_type(sexp)]);
 
     s32 buffer_space = vec_cap(buffer) - vec_len(buffer);
     s32 bytes_written = 0;
@@ -557,12 +550,10 @@ sexp_serialize_list(const sexp *list, vector *buffer) {
     if (buffer == NULL)
         return RESULT_MSG_ERROR(s32, "unexpected NULL buffer");
 
-    if (list == NULL)
-        return RESULT_MSG_ERROR(s32, "unexpected NULL sexp");
+    if (sexp_type(list) != SEXP_CONS && sexp_type(list) != SEXP_NIL)
+        return RESULT_MSG_ERROR(s32, "sexp type is %s, not SEXP_CONS or SEXP_NIL",
+                                g_reflected_sexp_type[sexp_type(list)]);
     
-    if (list->sexp_type != SEXP_CONS)
-        return RESULT_MSG_ERROR(s32, "expected sexp of type SEXP_CONS");
-
     size_t start_length = vec_len(buffer);
 
     sexp *element;

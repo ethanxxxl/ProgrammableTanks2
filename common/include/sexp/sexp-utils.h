@@ -285,4 +285,6 @@ bool sexp_ris_nil(struct result_sexp sexp);
 
 struct result_sexp sexp_nil();
 
+enum sexp_type sexp_type(const struct sexp *s);
+
 #endif

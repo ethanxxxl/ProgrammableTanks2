@@ -8,6 +8,13 @@
 #include <stdlib.h>
 #include <stdbool.h>
 
+enum sexp_memory_method sexp_mem_meth(struct sexp *s) {
+    if (sexp_is_nil(s))
+        return SEXP_MEMORY_TREE;
+
+    return s->is_linear ? SEXP_MEMORY_LINEAR : SEXP_MEMORY_TREE;
+}
+
         
 // FIXME create compound errors. If there are multiple errors, return
 // them all, not just the first one that is encountered.
@@ -171,22 +178,15 @@ struct result_str sexp_sym_val(const sexp *s) {
 }
 
 bool sexp_is_nil(const sexp *s) {
-    if (s == NULL)
+    if (s == NULL || s->sexp_type == SEXP_NIL)
         return true;
 
     if (s->sexp_type != SEXP_CONS)
         return false;
 
-    struct result_sexp r = sexp_cdr(s);
-    if (r.status != RESULT_OK) {
-        // the check has already been done, this branch should not be entered.
-        printf("WARNING! recieved error in sexp_is_nil: %s\n",
-               describe_error(r.error));
-        free_error(r.error);
-        return false;
-    }
-        
-    sexp *cdr = r.ok;
+    // can't use sexp_cdr here, because sexp_cdr uses this function.
+    struct cons *cons_data = (struct cons *)s->data;
+    sexp *cdr = cons_data->cdr;
 
     if (cdr == s)
         return true;
@@ -425,4 +425,11 @@ struct result_sexp sexp_rpush(struct result_sexp list, struct result_sexp item) 
 
 struct result_sexp sexp_nil() {
     return result_sexp_ok(NULL);
+}
+
+enum sexp_type sexp_type(const struct sexp *s) {
+    if (sexp_is_nil(s))
+        return SEXP_NIL;
+
+    return s->sexp_type;
 }

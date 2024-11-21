@@ -28,6 +28,8 @@ enum sexp_memory_method {
 
     The `SEXP_LIST_TERMINATOR` is used as the last element in linear sexp lists.
 
+    IMPORTANT: this cannot be made any longer, unless you increase the bits
+    allocated to it in the sexp structure.
  */
 #define ENUM_SEXP_TYPE_ITEMS                \
     SEXP_CONS,                              \
@@ -35,6 +37,7 @@ enum sexp_memory_method {
     SEXP_STRING,                            \
     SEXP_INTEGER,                           \
     SEXP_TAG,                               \
+    SEXP_NIL,                               \
     SEXP_LIST_TERMINATOR,                   \
     SEXP_LINEAR_ROOT
 

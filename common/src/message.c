@@ -154,7 +154,7 @@ enum message_type message_get_type(const sexp *msg) {
         goto error_condition;
     }
 
-    if (type_sym.ok->sexp_type == SEXP_SYMBOL) {
+    if (sexp_type(type_sym.ok) == SEXP_SYMBOL) {
         struct result_str msg_type_str = sexp_str_val(type_sym.ok);
         if (msg_type_str.status == RESULT_ERROR) {
             e = msg_type_str.error;
@@ -165,7 +165,7 @@ enum message_type message_get_type(const sexp *msg) {
             if (strcmp(msg_type_str.ok, g_reflected_message_type[i]) == 0)
                 return i;
         }
-    } else if (type_sym.ok->sexp_type == SEXP_INTEGER) {
+    } else if (sexp_type(type_sym.ok) == SEXP_INTEGER) {
         struct result_s32 msg_type = sexp_int_val(type_sym.ok);
         if (msg_type.status == RESULT_ERROR) {
             e = msg_type.error;

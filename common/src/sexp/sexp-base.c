@@ -125,7 +125,7 @@ void free_sexp(struct sexp *sexp) {
         return;
     
     // FIXME what if this is a linear sexp?
-    if (sexp->sexp_type == SEXP_CONS) {
+    if (sexp_type(sexp) == SEXP_CONS) {
         struct cons cons = *(struct cons *)sexp->data;
 
         free(sexp);
@@ -175,6 +175,7 @@ struct result_sexp initialize_linear_sexp(struct sexp **root,
         data_length = sizeof(s32);
         break;
     case SEXP_CONS:
+    case SEXP_NIL:
     case SEXP_TAG:
     case SEXP_LIST_TERMINATOR:
         data_length = 0;
