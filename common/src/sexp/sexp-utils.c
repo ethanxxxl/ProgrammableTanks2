@@ -227,12 +227,14 @@ struct result_sexp sexp_last(sexp *s) {
         return RESULT_MSG_ERROR(sexp, "dst is %s, not a %s",
                                 g_reflected_sexp_type[s->sexp_type],
                                 g_reflected_sexp_type[SEXP_CONS]);
-    
-    sexp *last = s;
-    while (sexp_is_nil(last) == false) {
+    sexp *end = s;
+    sexp *last = end;
+    while (sexp_is_nil(end) == false) {
         struct result_sexp r = sexp_cdr(last);
         if (r.status == RESULT_ERROR) return r;
-        last = r.ok;
+
+        last = end;
+        end = r.ok;
     }
 
     return result_sexp_ok(last);

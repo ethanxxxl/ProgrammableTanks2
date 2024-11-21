@@ -312,16 +312,16 @@ struct result_sexp make_sexp(enum sexp_type type,
         switch (type) {
         case SEXP_STRING:
         case SEXP_SYMBOL:
-            data_len = strlen(data);
-        case SEXP_INTEGER:
-            data_len = sizeof(s32);
-        case SEXP_CONS:
-            data_len = sizeof(struct cons);
+            if (data != NULL)
+                data_len = strlen(data) + 1; // account for null terminator
+            else
+                data_len = sizeof(union sexp_data);
+            break;
         default:
-            data_len = 0;
+            data_len = sizeof(union sexp_data);
         }
 
-        root = malloc(sizeof(struct sexp) + sizeof(union sexp_data));
+        root = malloc(sizeof(struct sexp) + data_len);
         if (root == NULL)
             return RESULT_MSG_ERROR(sexp, "malloc returned NULL");
 

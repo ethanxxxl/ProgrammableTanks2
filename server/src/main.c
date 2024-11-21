@@ -6,6 +6,7 @@
 #include "scenario.h"
 #include "server-scenario.h"
 #include "message.h"
+#include "sexp/sexp-base.h"
 
 #include <stddef.h>
 #include <stdio.h>
@@ -112,16 +113,25 @@ void *accept_connections_thread(void* port_num) {
 void handle_client(struct player_manager* p, struct vector* msg_buf) {
     struct result_sexp r = message_recv(p->socket, msg_buf);
     if (r.status == RESULT_ERROR) {
-        // TODO handle this error!
-    }
-    
+        char *err_msg = describe_error(r.error);
+        puts(err_msg);
+        free(err_msg);
+        free_error(r.error);
+        return;
+    }         
     sexp *msg = r.ok;
+
+    if (sexp_is_nil(msg)) {
+        free_sexp(msg);
+        return;
+    }
     
     print_player(p);
     printf("--RECEIVED--\n");
     // XXX: debug message.
     sexp_print(msg);
-    
+    puts("\n");
+
     switch (p->state) {
     case STATE_DISCONNECTED:
         break;
@@ -143,7 +153,9 @@ void handle_client(struct player_manager* p, struct vector* msg_buf) {
             printf("%s: %s\n", p->username, r.ok);
         else {
             // TODO: handle error properly (maybe do some logging?)
-            puts(describe_error(r.error));
+            char *err_msg = describe_error(r.error);
+            puts(err_msg);
+            free(err_msg);
             free_error(r.error);
             return;
         }

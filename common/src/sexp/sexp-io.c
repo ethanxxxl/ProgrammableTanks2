@@ -556,8 +556,7 @@ sexp_serialize_list(const sexp *list, vector *buffer) {
     
     size_t start_length = vec_len(buffer);
 
-    sexp *element;
-    RESULT_UNWRAP(s32, element, sexp_nth(list, 0));
+    sexp *element = (sexp *)list;
 
     vec_push(buffer, "(");
     
@@ -565,13 +564,15 @@ sexp_serialize_list(const sexp *list, vector *buffer) {
     bool is_nil = true;
     while (sexp_is_nil(element) == false) {
         // put the serialized element on the end of the buffer
-        r = sexp_serialize_any(element, buffer);
+        sexp *item;
+        RESULT_UNWRAP(s32, item, sexp_car(element));
+        
+        r = sexp_serialize_any(item, buffer);
         if (r.status == RESULT_ERROR)
             return r;
 
         // Add space between sexp elements
         vec_push(buffer, " ");
-
 
         RESULT_UNWRAP(s32, element, sexp_cdr(element));
         is_nil = false;
