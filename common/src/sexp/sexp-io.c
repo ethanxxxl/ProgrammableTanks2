@@ -40,6 +40,7 @@ sexp_read_atom(const char **caller_cursor,
 
     bool should_skip_terminator = false;
     bool symbol_is_escaped = false;
+    bool is_netstring = false;
     
     // Determine atom type and extract data.    
     if (digit_end != cursor && *digit_end == ':') {
@@ -47,6 +48,7 @@ sexp_read_atom(const char **caller_cursor,
         atom_type = SEXP_SYMBOL;
         atom_data.str = digit_end+1;
         atom_length = atom_number_value;
+        is_netstring = true;
         
         *caller_cursor = digit_end + atom_number_value + 1;
         
@@ -100,7 +102,8 @@ sexp_read_atom(const char **caller_cursor,
     }
 
     // Get lengths for stringy sexp types.
-    if (atom_type == SEXP_SYMBOL || atom_type == SEXP_STRING) {
+    if ((atom_type == SEXP_SYMBOL || atom_type == SEXP_STRING) &&
+        is_netstring == false) {
         for (atom_length = 0;
              memchr(delims, *cursor, num_delims) == NULL && *cursor != '\0';
              cursor++, atom_length++);
@@ -238,15 +241,7 @@ sexp_read_list(const char **caller_cursor,
     const char* cursor = *caller_cursor;
 
     sexp *list;
-    struct result_sexp r;
-    if (parent == NULL) {
-        r = make_sexp(SEXP_CONS, method, NULL);
-
-        if (r.status == RESULT_ERROR)
-            return r;
-
-        list = r.ok;
-    }
+    RESULT_UNWRAP(sexp, list, make_sexp(SEXP_CONS, method, NULL));
 
     while (true) {
         // skip leading whitespace
@@ -261,13 +256,18 @@ sexp_read_list(const char **caller_cursor,
         if (*cursor == '\0')
             return reader_err(SEXP_RESULT_LIST_NOT_CLOSED, *caller_cursor, cursor);
 
+        // TODO should this just use the result of the sexp_reader function?
         // read the next element and append it to list.
-        r = sexp_reader(&cursor,
-                        list,
-                        method);
-        
-        if (r.status == RESULT_ERROR)
-            return r;
+        RESULT_CALL(sexp, sexp_reader(&cursor,
+                                      list,
+                                      method));
+    }
+
+    if (parent == NULL) {
+        return result_sexp_ok(list);
+    } else {
+        sexp_push(parent, list);
+        return result_sexp_ok(list);
     }
 }
 
@@ -344,7 +344,7 @@ sexp_read(const char *sexp_str, enum sexp_memory_method method) {
     if (*cursor == ')')
         return reader_err(SEXP_RESULT_INVALID_CHARACTER, sexp_str, cursor);
 
-    r = sexp_reader(&sexp_str, NULL, method);
+    r = sexp_reader(&cursor, NULL, method);
 
     if (r.status == RESULT_ERROR)
         return r;
