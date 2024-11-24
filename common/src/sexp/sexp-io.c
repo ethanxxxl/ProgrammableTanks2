@@ -410,7 +410,7 @@ sexp_serialize_symbol(const sexp *sexp, vector *buffer) {
     s32 bytes_written = 0;
 
     do {
-        bytes_written = snprintf(vec_end(buffer),
+        bytes_written = snprintf((char *)vec_last(buffer) + 1,
                                  buffer_space,
                                  "%.*s",
                                  sexp->data_length,
@@ -420,13 +420,15 @@ sexp_serialize_symbol(const sexp *sexp, vector *buffer) {
             s32 r = vec_reserve(buffer, vec_len(buffer) + bytes_written + 1);
             if (r == -1)
                 return RESULT_MSG_ERROR(s32, "vector resize failed");
+
+            buffer_space = vec_cap(buffer) - vec_len(buffer);
+
             continue;
         }
 
         vec_resize(buffer, vec_len(buffer) + bytes_written);
         break;
-        
-    } while (true);
+    } while(true);
 
     return result_s32_ok(bytes_written);
 }
@@ -460,7 +462,7 @@ sexp_serialize_tag(const sexp *sexp, vector *buffer) {
     size_t bytes_written = 0;
 
     do {
-        bytes_written = snprintf(vec_end(buffer),
+        bytes_written = snprintf((char *)vec_last(buffer) + 1,
                                  buffer_space,
                                  "[%.*s]%.*s",
                                  tag->data_length, tag->data,
@@ -494,7 +496,7 @@ sexp_serialize_string(const sexp *sexp, vector *buffer) {
     s32 bytes_written = 0;
 
     do {
-        bytes_written = snprintf(vec_end(buffer),
+        bytes_written = snprintf((char *)vec_last(buffer) + 1,
                                  buffer_space,
                                  "\"%s\"", (char*)sexp->data);
 
@@ -502,6 +504,8 @@ sexp_serialize_string(const sexp *sexp, vector *buffer) {
             s32 r = vec_reserve(buffer, vec_len(buffer) + bytes_written + 1);
             if (r == -1)
                 return RESULT_MSG_ERROR(s32, "vector resize failed");
+
+            buffer_space = vec_cap(buffer) - vec_len(buffer);
 
             continue;
         }
@@ -526,7 +530,7 @@ sexp_serialize_integer(const sexp *sexp, vector *buffer) {
     s32 bytes_written = 0;
 
     do {
-        bytes_written = snprintf(vec_end(buffer),
+        bytes_written = snprintf((char *)vec_last(buffer) + 1,
                                  buffer_space,
                                  "%d", *(u32*)sexp->data);
 
@@ -655,4 +659,10 @@ s32 sexp_print(const struct sexp *s) {
     }
 
     return r.ok;
+}
+
+s32 sexp_println(const struct sexp *s) {
+    s32 r = sexp_print(s);
+    r += puts("\n");
+    return r;
 }

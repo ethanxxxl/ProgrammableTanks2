@@ -112,14 +112,16 @@ int main(int argc, char **argv) {
                    &command_line_thread,
                    &COMMAND_LINE_ENVIRONMENT);
 
-    printf("quitting program...\n");
-
-    if (command_line_pid != 0)
+    if (command_line_pid != 0) {
         pthread_join(command_line_pid, NULL);
+        printf("quitting program...\n");
+    }
     
-    if (g_gfx_pid != 0)
+    if (g_gfx_pid != 0) {
+        printf("killing graphics...\n");
         pthread_join(g_gfx_pid, NULL);
-
+    }
+    
     if (g_read_msg_pid != 0)
         pthread_join(g_read_msg_pid, NULL);
 

@@ -46,6 +46,7 @@ struct result_vec sexp_serialize_vec(const struct sexp *sexp);
 struct result_s32 sexp_fprint(const struct sexp*, FILE*);
 
 /* TODO document this function*/
-s32 sexp_print(const struct sexp*);
+s32 sexp_print(const struct sexp *);
+s32 sexp_println(const struct sexp *);
 
 #endif

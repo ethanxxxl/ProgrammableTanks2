@@ -78,7 +78,7 @@ void *read_msg_thread(void *arg) {
             }
 
             struct player_public_data* pd = vec_dat(tick.players_public_data);
-            struct player_public_data* end = vec_end(tick.players_public_data);
+            struct player_public_data* end = vec_last(tick.players_public_data);
             for (; pd <= end; pd++) {
                 players_update_player(vec_dat(pd->username), pd->tank_positions);
             }
@@ -112,9 +112,16 @@ struct result_s32 debug_send_msg(sexp *msg) {
         RESULT_MSG_ERROR(s32, "ERROR! you must connect to the server first!\n");
 
     printf("--SENDING--\n");
-    sexp_print(msg);
+    printf("sending message: ");
+    sexp_println(msg);
 
-    return message_send(g_server_sock, msg);
+    struct result_s32 r = message_send(g_server_sock, msg);
+    if (r.status == RESULT_OK)
+        printf("message sent.\n");
+    else
+        printf("message not sent.\n");
+    
+    return r;
 }
 
 void enable_print_messages(int argc, char **argv, struct error *e) {
@@ -373,7 +380,7 @@ void connect_serv(int argc, char **argv, struct error *e) {
            NULL);
 
     g_server_connected = true;
-    *e = make_msg_error("connected to server on %s:%d\n", address, port);
+    printf("connected to server on %s:%d\n", address, port);
     return;
 }
 

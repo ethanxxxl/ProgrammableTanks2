@@ -105,7 +105,7 @@ struct result_sexp sexp_rsetcdr(struct result_sexp dst, struct result_sexp cdr) 
     if (cdr.status == RESULT_ERROR)
         return cdr;
 
-    return sexp_setcar(dst.ok, cdr.ok);
+    return sexp_setcdr(dst.ok, cdr.ok);
 }
 
 struct result_sexp sexp_car(const sexp *sexp) {

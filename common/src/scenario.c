@@ -39,7 +39,7 @@ struct player_public_data player_public_data_get(const struct player_data* pd) {
     public_data.tank_positions =
         make_vector(sizeof(struct coord), vec_len(pd->tanks));
     
-    struct tank* last_tank = vec_end(pd->tanks);
+    struct tank* last_tank = vec_last(pd->tanks);
     for (struct tank* t = vec_dat(pd->tanks); t <= last_tank; t++) {
         vec_push(public_data.tank_positions, &t->pos);
     } 

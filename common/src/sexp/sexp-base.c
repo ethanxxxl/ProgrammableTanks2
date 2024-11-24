@@ -330,6 +330,12 @@ struct result_sexp make_sexp(enum sexp_type type,
         root->data_length = data_len;
         root->sexp_type = type;
 
+        // HACK this is mostly for when the data type is a string.  This way, if
+        // the string is smaller than sizeof(union sexp_data), there will not be
+        // any garbage in the string. This could also probably be accomplished
+        // by setting the first byte to zero as well.
+        memset(root->data, 0, data_len);
+        
         if (data != NULL)
             memcpy(root->data, data, data_len);
 

@@ -103,12 +103,12 @@ struct result_sexp message_recv(int fd, struct vector* buf) {
         space_available = vec_cap(buf) - vec_len(buf);
     }
 
-    int bytes_read = read(fd, (char *)vec_end(buf) + 1, space_available);
+    int bytes_read = read(fd, (char *)vec_last(buf) + 1, space_available);
     vec_resize(buf, vec_len(buf) + bytes_read);
 
     // increases with open paren, decreases with close paren
     s32 paren_count = 0;
-    for (char *c = vec_dat(buf); c < (char *)vec_end(buf); c++) {
+    for (char *c = vec_dat(buf); c < (char *)vec_last(buf); c++) {
         if (*c == '(')
             paren_count++;
         else if (*c == ')')

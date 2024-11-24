@@ -140,7 +140,8 @@ const char* tst_scenario_tick_serde(void) {
     vector* public_data = make_vector(sizeof(struct player_public_data), 10);
 
     for (struct player_data* pd = vec_dat(player_data);
-         pd <= (struct player_data*)vec_end(player_data);
+         pd <= (struct player_data*)vec_last
+             (player_data);
          pd++) {
         struct player_public_data pub_dat = player_public_data_get(pd);
         vec_push(public_data, &pub_dat);

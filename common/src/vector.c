@@ -227,7 +227,7 @@ int vec_concat(struct vector* vec, const struct vector* src) {
     return 0;
 }
 
-void* vec_end(const struct vector* vec) {
+void* vec_last(const struct vector* vec) {
     if (vec == NULL)
         return NULL;
 
