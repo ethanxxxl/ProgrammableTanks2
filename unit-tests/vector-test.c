@@ -1,8 +1,10 @@
+#include "error.h"
 #include "unit-test.h"
 #include "vector.h"
 
 #include <limits.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <string.h>
 
 const char INIT_FAIL[] = "failed to create vector.";
@@ -11,67 +13,64 @@ const char INIT_FAIL[] = "failed to create vector.";
 // server translation unit. In order for the tests to compile, they need to
 // provide a defnition for this global variable.
 
-const char* tst_vec_push(void) {
+struct result_void tst_vec_push(void) {
     int ret;
     struct vector* vec = make_vector(sizeof(int), 3);
 
     if (vec == NULL)
-        return INIT_FAIL;
+        return fail_msg(INIT_FAIL);
 
-    char *return_error = NULL;
-    static char error[63] = {0};
+    struct result_void error = result_void_ok(0);
     for (int i = 0; i < 5000; i++) {
         for (int j = 0; j < i; j++) {
             // guarantee no previous elements are being written over.
             if (((int*)vec_dat(vec))[j] != j) {
-                snprintf(error, 63,
-                         "%dth push operation overwrote %dth element.", i, j);
+                error = fail_msg("%dth push operation overwrote %dth element.",
+                                 i, j);
                 
-                return_error = error;
                 goto cleanup_return;
             }   
         }
        
         ret = vec_push(vec, &i);
         if (ret != 0) {
-            return_error = "vec_push self reported failure";
+            error = fail_msg("vec_push self reported failure");
             goto cleanup_return;
         }
             
         
         if (((int*)vec_dat(vec))[i] != i) {
-            snprintf(error, 63, "pushing failed on element %d.", i);
-            return_error = error;
+            error = fail_msg("pushing failed on element %d.", i);
             goto cleanup_return;
         }
     }
 
  cleanup_return:
     free_vector(vec);
-    return return_error;
+    return error;
 }
 
-const char* tst_vec_push_null(void) {
+struct result_void tst_vec_push_null(void) {
     int ret;
     struct vector* vec = make_vector(sizeof(int), 0);
     
     if (vec == NULL)
-        return INIT_FAIL;
+        return fail_msg(INIT_FAIL);
     
     ret = vec_push(vec, NULL);
     if (ret != -1 || vec_len(vec) != 0)
-        return "pushed a fictitious element onto stack.";
+        fail_msg("pushed a fictitious element onto stack.");
 
     free_vector(vec);
-    return NULL;
+    return no_error();
 }
 
-const char* tst_vec_pushn(void) {
+struct result_void tst_vec_pushn(void) {
     int ret;
 
     struct vector* vec = make_vector(sizeof(int), 1);
     if (vec == NULL)
-        return INIT_FAIL;
+        return fail_msg(INIT_FAIL);
 
     // setup an array to copy.
     const int values_len = 50;
@@ -116,27 +115,31 @@ const char* tst_vec_pushn(void) {
 
  cleanup_return:
     free_vector(vec);
-    return return_error;
+
+    if (return_error != NULL)
+        return fail_msg(return_error);
+    else
+        return no_error();
 }
 
-const char* tst_vec_pushn_null(void) {
+struct result_void tst_vec_pushn_null(void) {
     int ret;
     struct vector* vec = make_vector(sizeof(int), 0);
     if (vec == NULL)
-        return INIT_FAIL;
+        return fail_msg(INIT_FAIL);
     
     ret = vec_pushn(vec, NULL, 50);
     if (ret != -1 || vec_len(vec) != 0)
-        return "pushed fictitious elements onto stack";
+        fail_msg("pushed fictitious elements onto stack");
 
     free_vector(vec);
-    return NULL;
+    return no_error();
 }
 
-const char* tst_vec_ref(void) {
+struct result_void tst_vec_ref(void) {
     struct vector* vec = make_vector(sizeof(int), 1);
     if (vec == NULL)
-        return INIT_FAIL;
+        return fail_msg(INIT_FAIL);
 
     for (int x = 0; x < 1000; x++)
         vec_push(vec, &x);
@@ -163,15 +166,19 @@ const char* tst_vec_ref(void) {
 
  cleanup_return:
     free_vector(vec);
-    return error_message;
+
+    if (error_message != NULL)
+        return fail_msg(error_message);
+    else
+        return no_error();
 }
 
-const char* tst_vec_reserve(void) {
+struct result_void tst_vec_reserve(void) {
     int ret;
 
     struct vector* vec = make_vector(sizeof(int), 1);
     if (vec == NULL)
-        return INIT_FAIL;
+        return fail_msg(INIT_FAIL);
 
     char *error_message = NULL;
     for (size_t i = 10; i < 550; i += 10) {
@@ -217,16 +224,20 @@ const char* tst_vec_reserve(void) {
 
  cleanup_return:
     free_vector(vec);
-    return error_message;
+
+    if (error_message != NULL)
+        return fail_msg(error_message);
+    else
+        return no_error();
 }
 
-const char* tst_vec_reserve_zero(void) {
+struct result_void tst_vec_reserve_zero(void) {
     int ret;
     char *error_message = NULL;
 
     struct vector* vec = make_vector(sizeof(int), 1);
     if (vec == NULL)
-        return INIT_FAIL;
+        return fail_msg(INIT_FAIL);
 
     // this should just be a do nothing call really.
     ret = vec_reserve(vec, 0);
@@ -236,16 +247,20 @@ const char* tst_vec_reserve_zero(void) {
         error_message = "failed on a \"successful\" allocation.";
 
     free_vector(vec);
-    return error_message;
+
+    if (error_message != NULL)
+        return fail_msg(error_message);
+    else
+        return no_error();
 }
 
-const char* tst_vec_resize(void) {
+struct result_void tst_vec_resize(void) {
     int ret;
     char *error_message = NULL;
 
     struct vector* vec = make_vector(sizeof(int), 1);
     if (vec == NULL)
-        return INIT_FAIL;
+        return fail_msg(INIT_FAIL);
 
     // initialize vector
     for (int i = 0; i < 1000; i++) {
@@ -303,16 +318,20 @@ const char* tst_vec_resize(void) {
     
  cleanup_return:
     free_vector(vec);
-    return error_message;
+
+    if (error_message != NULL)
+        return fail_msg(error_message);
+    else
+        return no_error();
 }
 
-const char* tst_vec_pop(void) {
+struct result_void tst_vec_pop(void) {
     int ret;
     char *error_message = NULL;
 
     struct vector* vec = make_vector(sizeof(int), 1);
     if (vec == NULL)
-        return INIT_FAIL;
+        return fail_msg(INIT_FAIL);
 
     // initialize vector.
     for (int i = 0; i < 1000; i++) {
@@ -342,17 +361,21 @@ const char* tst_vec_pop(void) {
         
  cleanup_return:
     free_vector(vec);
-    return error_message;
+
+    if (error_message != NULL)
+        return fail_msg(error_message);
+    else
+        return no_error();
 }
 
 // tests pop with NULL src
-const char* tst_vec_pop_null(void) {
+struct result_void tst_vec_pop_null(void) {
     int ret;
     char *error_message = NULL;
 
     struct vector* vec = make_vector(sizeof(int), 1);
     if (vec == NULL)
-        return INIT_FAIL;
+        return fail_msg(INIT_FAIL);
 
     int val = 1234;
     vec_push(vec, &val);
@@ -362,33 +385,41 @@ const char* tst_vec_pop_null(void) {
         error_message = "return != 0";
 
     free_vector(vec);
-    return error_message;
+
+    if (error_message != NULL)
+        return fail_msg(error_message);
+    else
+        return no_error();
 }
 
 // tests pop on an empty vector
-const char* tst_vec_pop_empty(void) {
+struct result_void tst_vec_pop_empty(void) {
     int ret;
     char *error_message = NULL;
 
     struct vector* vec = make_vector(sizeof(int), 1);
     if (vec == NULL)
-        return INIT_FAIL;
+        return fail_msg(INIT_FAIL);
 
     ret = vec_pop(vec, NULL);
     if (ret == 0)
         error_message = "popped on an empty list.";
 
     free_vector(vec);
-    return error_message;
+
+    if (error_message != NULL)
+        return fail_msg(error_message);
+    else
+        return no_error();
 }
 
-const char* tst_vec_rem_front(void) {
+struct result_void tst_vec_rem_front(void) {
     int ret;
     char *error_message = NULL;
 
     struct vector* vec = make_vector(sizeof(int), 1);
     if (vec == NULL)
-        return INIT_FAIL;
+        return fail_msg(INIT_FAIL);
 
     // initialize vector
     for (int i = 0; i < 100; i++)
@@ -417,16 +448,20 @@ const char* tst_vec_rem_front(void) {
         
  cleanup_return:
     free_vector(vec);
-    return error_message;
+
+    if (error_message != NULL)
+        return fail_msg(error_message);
+    else
+        return no_error();
 }
 
-const char* tst_vec_rem_end(void) {
+struct result_void tst_vec_rem_end(void) {
     int ret;
     char *error_message = NULL;
 
     struct vector* vec = make_vector(sizeof(int), 1);
     if (vec == NULL)
-        return INIT_FAIL;
+        return fail_msg(INIT_FAIL);
     
     // initialize vector
     for (int i = 0; i < 100; i++)
@@ -455,16 +490,20 @@ const char* tst_vec_rem_end(void) {
     
  cleanup_return:
     free_vector(vec);
-    return error_message;
+
+    if (error_message != NULL)
+        return fail_msg(error_message);
+    else
+        return no_error();
 }
 
-const char* tst_vec_rem_out_of_bounds(void) {
+struct result_void tst_vec_rem_out_of_bounds(void) {
     int ret;
     char *error_message = NULL;
 
     struct vector* vec = make_vector(sizeof(int), 1);
     if (vec == NULL)
-        return INIT_FAIL;
+        return fail_msg(INIT_FAIL);
 
     int val = 333;
     vec_push(vec, &val);
@@ -475,17 +514,21 @@ const char* tst_vec_rem_out_of_bounds(void) {
         error_message = "messed with the vector, should have returned -1.";
 
     free_vector(vec);
-    return error_message;
+
+    if (error_message != NULL)
+        return fail_msg(error_message);
+    else
+        return no_error();
 }
 
 
-const char* tst_vec_at(void) {
+struct result_void tst_vec_at(void) {
     int ret;
     char *error_message = NULL;
 
     struct vector* vec = make_vector(sizeof(int), 1);
     if (vec == NULL)
-        return INIT_FAIL;
+        return fail_msg(INIT_FAIL);
 
     int val = 454;
     vec_push(vec, &val);
@@ -499,16 +542,20 @@ const char* tst_vec_at(void) {
     }
 
     free_vector(vec);
-    return error_message;
+
+    if (error_message != NULL)
+        return fail_msg(error_message);
+    else
+        return no_error();
 }
 
-const char* tst_vec_at_out_of_bounds(void) {
+struct result_void tst_vec_at_out_of_bounds(void) {
     int ret;
     char *error_message = NULL;
 
     struct vector* vec = make_vector(sizeof(int), 1);
     if (vec == NULL)
-        return INIT_FAIL;
+        return fail_msg(INIT_FAIL);
 
     int dst = 23;
     ret = vec_at(vec, 0, &dst);
@@ -519,16 +566,20 @@ const char* tst_vec_at_out_of_bounds(void) {
         error_message = "wrote garbage to dst";
 
     free_vector(vec);
-    return error_message;
+
+    if (error_message != NULL)
+        return fail_msg(error_message);
+    else
+        return no_error();
 }
 
-const char* tst_vec_at_null_dst(void) {
+struct result_void tst_vec_at_null_dst(void) {
     int ret;
     char *error_message = NULL;
 
     struct vector* vec = make_vector(sizeof(int), 1);
     if (vec == NULL)
-        return INIT_FAIL;
+        return fail_msg(INIT_FAIL);
 
     int val = 12;
     vec_push(vec, &val);
@@ -538,16 +589,20 @@ const char* tst_vec_at_null_dst(void) {
         error_message = "claims to have written to NULL";
 
     free_vector(vec);
-    return error_message;
+
+    if (error_message != NULL)
+        return fail_msg(error_message);
+    else
+        return no_error();
 }
 
-const char* tst_vec_set(void) {
+struct result_void tst_vec_set(void) {
     int ret;
     char *error_message = NULL;
 
     struct vector* vec = make_vector(sizeof(int), 1);
     if (vec == NULL)
-        return INIT_FAIL;
+        return fail_msg(INIT_FAIL);
 
     for (int i = 0; i < 1000; i++)
         vec_push(vec, &i);
@@ -580,16 +635,20 @@ const char* tst_vec_set(void) {
 
  cleanup_return:
     free_vector(vec);
-    return error_message;
+
+    if (error_message != NULL)
+        return fail_msg(error_message);
+    else
+        return no_error();
 }
 
-const char* tst_vec_set_null(void) {
+struct result_void tst_vec_set_null(void) {
     int ret;
     char *error_message = NULL;
 
     struct vector* vec = make_vector(sizeof(int), 1);
     if (vec == NULL)
-        return INIT_FAIL;
+        return fail_msg(INIT_FAIL);
 
     int val = 234;
     vec_push(vec, &val);
@@ -599,16 +658,20 @@ const char* tst_vec_set_null(void) {
         error_message = "claims to have coppied from NULL";
 
     free_vector(vec);
-    return error_message;
+
+    if (error_message != NULL)
+        return fail_msg(error_message);
+    else
+        return no_error();
 }
 
-const char* tst_vec_set_out_of_bounds(void) {
+struct result_void tst_vec_set_out_of_bounds(void) {
     int ret;
     char *error_message = NULL;
 
     struct vector* vec = make_vector(sizeof(int), 1);
     if (vec == NULL)
-        return INIT_FAIL;
+        return fail_msg(INIT_FAIL);
 
     // clear out this memory for testing.
     char clear[50] = {0};
@@ -622,7 +685,11 @@ const char* tst_vec_set_out_of_bounds(void) {
         error_message = "wrote out fo bounds";
     
     free_vector(vec);
-    return error_message;
+
+    if (error_message != NULL)
+        return fail_msg(error_message);
+    else
+        return no_error();
 }
 
 struct test g_all_tests[] = {

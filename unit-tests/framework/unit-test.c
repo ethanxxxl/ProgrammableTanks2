@@ -1,35 +1,25 @@
-#include <stddef.h>
-#include <string.h>
-#include <stdio.h>
-#include <unistd.h>
-
+#include "unit-test.h"
+#include "error.h"
 #include "vector.h"
 
-/**
- * Main structure for unit testing.
- *
- * Associates a given test with a name. In the future, other data may be added,
- * but as of now, this simple structure will suffice.
- *
- * the function will return a pointer to an error message (c-str) that describes
- * how the test failed, or NULL.
- */
-struct test {
-    char* name;
-    const char* (*unit_test)(void);
-};
+#include <stdlib.h>
+#include <string.h>
+#include <stdio.h>
 
-/**
- * A common error type for unit tests to return in general cases.
- */
 const char GENERAL_ERROR[] = "GENERAL ERROR";
 const char TEST_NOT_IMPLEMENTED_ERROR[] = "TEST NOT IMPLEMENTED";
 
-struct failed_test {
-    int num;
-    const char* name;
-    const char* error_message;
-};
+struct result_void fail_msg(const char *fmt, ...) {
+    va_list args;
+    va_start(args, fmt);
+
+    return result_void_error(vmake_msg_error(fmt, args));
+}
+
+/** returns a non-error status result struct. */
+struct result_void no_error() {
+    return result_void_ok(0);
+}
 
 // color codes, only visible in this file.
 static const char CODE_CLEAR[]      = "\033[0m";
@@ -39,25 +29,10 @@ static const char CODE_BOLD_CLR[]   = "\033[22m";
 static const char CODE_ITALIC[]     = "\033[3m";
 static const char CODE_ITALIC_CLR[] = "\033[23m";
 static const char CODE_BG_GREEN[]   = "\033[30;42m";
-static const char CODE_BG_RED[]     = "\033[30;41m";
+static const char CODE_BG_RED[] = "\033[30;41m";
 
-/**
- * "main" function for all test suites.
- *
- * As tests in `tests` are run, they will be printed out in a neatly formatted
- * and aligned table. To indicate progress, before a test is ran, an
- * unhighlighted entry in the table is appended. Once the test is finished, that
- * entry is updated to match the test result.
- *
- * @param[in] tests an array of test structurs to be run.
- * @param[in] num_tests number of tests within `tests`
- * @param[in] test_suite_name name of the entire test suite. will be drawn in
- *            the table header.
- *
- * @return None.
- */
 void run_test_suite(const struct test tests[], size_t num_tests,
-               const char *test_suite_name) {
+                    const char *test_suite_name) {
     // get length of left column
     size_t l_column_size = 0;
 
@@ -160,13 +135,23 @@ void run_test_suite(const struct test tests[], size_t num_tests,
             result_str = failed_str;
             line_bg    = line_bg_fail;
         } else {
-            const char *result = tests[i].unit_test();
-            result_str = (result == NULL) ? passed_str : failed_str;
-            line_bg    = (result == NULL) ? line_bg_pass : line_bg_fail;
+            struct result_void result = tests[i].unit_test();
 
-            struct failed_test failed_test = { (int)i, tests[i].name, result };
-            if (result != NULL)
+            if (result.status == RESULT_OK) {
+                result_str = passed_str;
+                line_bg = line_bg_pass;
+            } else {
+                result_str = failed_str;
+                line_bg = line_bg_fail;
+
+                struct failed_test failed_test = {
+                    .num = (int)i,
+                    .name = tests[i].name,
+                    .error = result.error,
+                };                
+
                 vec_push(errors, &failed_test);
+            }
         }
         
         printf("\033[0G"); // go back to beginning of line.
@@ -192,7 +177,12 @@ void run_test_suite(const struct test tests[], size_t num_tests,
     for (size_t i = 0; i < vec_len(errors); i++) {
         struct failed_test test;
         vec_at(errors, i, &test);
-        printf("[%d] %s: %s\n", test.num, test.name, test.error_message);
+
+        char *err_msg = describe_error(test.error);
+        printf("[%d] %s: %s\n", test.num, test.name, err_msg);
+
+        free(err_msg);
+        free_error(test.error);
     }
 
     printf("\n");

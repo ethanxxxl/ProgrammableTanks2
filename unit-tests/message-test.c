@@ -16,13 +16,13 @@ extern struct scenario g_scenario;
 struct scenario g_scenario;
 
 // data-carrying message types.
-const char* tst_text_msg_serde(void) {
-    return TEST_NOT_IMPLEMENTED_ERROR;
+struct result_void tst_text_msg_serde(void) {
+    return fail_msg(TEST_NOT_IMPLEMENTED_ERROR);
 }
-const char* tst_user_credentials_serde(void) {
-    return TEST_NOT_IMPLEMENTED_ERROR;
+struct result_void tst_user_credentials_serde(void) {
+    return fail_msg(TEST_NOT_IMPLEMENTED_ERROR);
 }
-const char* tst_player_update_serde(void) {
+struct result_void tst_player_update_serde(void) {
     char* error_msg = NULL;
 
     vector* commands = make_vector(sizeof(enum tank_command), 30);
@@ -36,7 +36,7 @@ const char* tst_player_update_serde(void) {
         vec_push(targets, &pos);
     }
 
-    struct message out_msg;
+    struct sexp out_msg;
     make_message(&out_msg, MSG_REQUEST_PLAYER_UPDATE);
 
     out_msg.player_update.tank_instructions = commands;
@@ -103,7 +103,7 @@ const char* tst_player_update_serde(void) {
     return error_msg;
  }
  
-const char* tst_scenario_tick_serde(void) {
+struct result_void tst_scenario_tick_serde(void) {
     char* error_msg = NULL;
     
     struct vector* player_data = make_vector(sizeof(struct player_data), 10);

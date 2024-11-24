@@ -1,3 +1,6 @@
+#include "error.h"
+#include "sexp/sexp-base.h"
+#include "sexp/sexp-io.h"
 #include "unit-test.h"
 
 #include "sexp.h"
@@ -62,7 +65,7 @@ s32 open_test_file(const char* filepath,
         // store the line in the buffer. replace the newlines character with
         // null terminator
         vec_pushn(*buffer, line_buffer, bytes_read);
-        *(char*)vec_end(*buffer) = '\0';
+        *(char*)vec_last(*buffer) = '\0';
     };
 
     fclose(test_file);
@@ -78,8 +81,8 @@ struct test_case {
     const char* assert;
 };
 
-const char* g_reader_test_filepath = "unit-tests/csexp-tests/reader-tests.org";
-const char* g_reader_log_filepath  = "unit-tests/csexp-tests/reader-log.org";
+const char* g_reader_test_filepath = "unit-tests/sexp-tests/reader-tests.org";
+const char* g_reader_log_filepath  = "unit-tests/sexp-tests/reader-log.org";
 vector *g_reader_test_file;
 vector *g_reader_test_file_line_cache;
 
@@ -134,13 +137,13 @@ const char* org_item_description(const char* line, const char* item) {
  * have the text <NULL> as the result.  While this would be a valid atom, it is
  * reserved for this purpose.
  */
-const char* tst_reader(void) {
+struct result_void tst_reader(void) {
     static size_t current_line = 0;
-    char* error_msg = NULL;
+    struct result_void general_result = no_error();
 
     FILE* log_file = fopen(g_reader_log_filepath, "a+");
     if (log_file == NULL) {
-        return "COULDN'T OPEN LOG FILE";
+        return fail_msg("COULDN'T OPEN LOG FILE");
     }
 
     vector* buffer = g_reader_test_file;
@@ -158,7 +161,6 @@ const char* tst_reader(void) {
             break;
         }
     }
-    
     for (; current_line < vec_len(line_cache); current_line++) {
         char* line = get_file_line(current_line, buffer, line_cache);
 
@@ -180,69 +182,68 @@ const char* tst_reader(void) {
         } while (assert_str == NULL);
         
         /// RUN TEST
+        struct error test_error;
+        char *error_source = NULL;
+        char *out_str = "";
 
-        struct reader_result result = sexp_read(input_str, NULL, true);
-
+        struct result_sexp result_in = sexp_read(input_str, SEXP_MEMORY_TREE);
         struct sexp* sexp = NULL;
-        size_t sexp_length = 0;
-
-        if (result.status == RESULT_OK)
-            sexp_length = result.length;
-
-        u8 sexp_data[sexp_length];
-
-        if (result.status == RESULT_OK) {
-            sexp = (struct sexp*)sexp_data;
-            sexp_read(input_str, sexp, false);
-        }
-        
-        // put the input into the logfile
-        fprintf(log_file, "  - Input    :: %s\n", input_str);
-        fprintf(log_file, "    + Assert :: %s\n", assert_str); 
-        fprintf(log_file, "    + Return :: ");
-        fflush(log_file);
-
-        // find the position in the file before writing
-        fseek(log_file, 0, SEEK_END);
-        size_t start = ftell(log_file);
-
-        // print the sexp (unless parsing failed)
-        if (sexp != NULL) {
-            sexp_fprint(sexp, log_file);
-            fflush(log_file);
+        if (result_in.status == RESULT_ERROR) {
+            // READER ERROR
+            test_error = result_in.error;
+            error_source = "READER";
+            goto log_and_continue;
         } else {
-            fprintf(log_file,
-                    "<%s>\n", G_READER_RESULT_TYPE_STR[result.status]);
-            
+            sexp = result_in.ok;
         }
-        
-        // find the end of the log file to determine how much data was written
-        size_t end = ftell(log_file);
-        fseek(log_file, start, SEEK_SET);
-
-        // read in results from log file
-        char printed_sexp[end-start];
-        fread(printed_sexp, sizeof(char), end-start, log_file);
+            
+        struct result_str result_out = sexp_serialize(sexp);
+        if (result_out.status == RESULT_ERROR) {
+            // SERIALIZATION ERROR
+            free_sexp(sexp);
+            test_error = result_out.error;
+            error_source = "SERIALIZER";
+            goto log_and_continue;
+        } else {
+            out_str = result_out.ok;
+        }
 
         // assert_str has a newline instead of a null terminator, so don't
         // compare that last character
-        if (strncmp(printed_sexp, assert_str, strlen(assert_str)) != 0)
-            error_msg = "bad reader value, check log file";
-
-        // print error message on next line, after grabbing the output from the
-        // log file.
-        if (sexp == NULL && result.error_location != NULL) {
-            fprintf(log_file, "    + Error  :: %s\n", result.error_location);
+        if (strncmp(out_str, assert_str, strlen(assert_str)) != 0) {
+            // INCORRECT READBACK
+            test_error = fail_msg("sexp did not match the assert.").error;
+            error_source = "LOGIC";
         }
-        
-        fputs("\n", log_file);
-        fflush(log_file);
 
+    log_and_continue:
+        // put the input into the logfile
+        fprintf(log_file, "  - Input    :: %s\n", input_str);
+        fprintf(log_file, "    + Assert :: %s\n", assert_str); 
+        fprintf(log_file, "    + Return :: %s\n", out_str);
+        fflush(log_file);
+        
+        if (error_source != NULL) {
+            char *error_msg = describe_error(test_error);
+            fprintf(log_file, "    + Error Source :: %s\n", error_source);
+            fprintf(log_file, "    + Error MSG    :: %s\n", error_msg);
+            fflush(log_file);
+
+            free(error_msg);
+            free_error(test_error);
+
+            if (general_result.status == RESULT_OK)
+                general_result = fail_msg("see logs");
+        }
+
+        if (result_in.status == RESULT_OK)
+            free_sexp(sexp);
     }
+
 
     // find the next line that has a > on it.
     fclose(log_file);
-    return error_msg;
+    return general_result;
 }
 
 void run_reader_test_suite() {    
@@ -289,56 +290,10 @@ void run_reader_test_suite() {
             break;
     }
 
-    run_test_suite(tests, headings, "CSEXP reader tests");
+    run_test_suite(tests, headings, "SEXP reader tests");
 
     free_vector(buffer);
     free_vector(line_cache);
-}
-
-/***************************** DYNAMIC SEXP TESTS *****************************/
-const char *tst_comprehensive(void) {
-    struct sexp_dyn *sexp = sexp_dyn_read("(test 1 (2 3 \"four\"))");
-    struct sexp_dyn *current = sexp;
-
-    if (current->type != SEXP_CONS)
-        return "not cons type";
-
-    // FIXME this should also do a stringcmp of the value.
-    if (current->cons.car->type != SEXP_SYMBOL)
-        return "symbol TEST not found in (test 1 (2 3 \"four\"))";
-    
-    current = current->cons.cdr;
-    if (current->cons.car->type != SEXP_INTEGER)
-        return "integer 1 not found in (test 1 (2 3 \"four\"))";
-
-    current = current->cons.cdr;
-    if (current->cons.car->type != SEXP_CONS)
-        return "sub list not found in (test 1 (2 3 \"four\"))";
-
-    current = current->cons.car;
-    if (current->cons.car->type != SEXP_INTEGER)
-        return "integer 2 not found in (test 1 (2 3 \"four\"))";
-
-    current = current->cons.cdr;
-    if (current->cons.car->type != SEXP_INTEGER)
-        return "integer 3 not found in (test 1 (2 3 \"four\"))";
-
-    current = current->cons.cdr;
-    // FIXME this should also do a stringcmp of the value.
-    if (current->cons.car->type != SEXP_STRING)
-        return "string \"four\" not found in (test 1 (2 3 \"four\"))";
-    
-    return NULL;
-}
-
-
-
-struct test g_dyn_tests[] = {
-    {"test1", &tst_comprehensive}
-};
-    
-void sexp_dyn_test_suite() {
-    
 }
 
 int main(int argc, char **argv) {
@@ -346,7 +301,6 @@ int main(int argc, char **argv) {
     (void)argv;
 
     run_reader_test_suite();
-    run_test_suite(g_dyn_tests, 1, "sexp_dyn tests");
 
     return 0;
 }
