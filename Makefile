@@ -22,7 +22,7 @@ SRC_CLIENT = client.c client-commands.c client-gfx.c game-manager.c
 
 # unit tests will work differently, each unit will have a main function.
 TESTER_DIR = unit-tests
-SRC_TESTER = vector-test.c csexp-test.c message-test.c
+SRC_TESTER = vector-test.c sexp-test.c message-test.c
 
 # mains included here to filter out when running tests.
 MAINS = $(CLIENT_DIR)/client.c $(SERVER_DIR)/main.c
