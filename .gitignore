@@ -3,3 +3,7 @@ compile_commands.json
 autorun.sh
 a.out
 .cache/
+/doxyconfig
+/plan.html
+/progress-journal.org
+/unit-tests/sexp-tests/reader-log.org
