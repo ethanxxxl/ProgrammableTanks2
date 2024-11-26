@@ -95,6 +95,12 @@ struct result_u32 sexp_rlength(struct result_sexp sexp);
 /** Return the nth element (car) of the list. */
 struct result_sexp sexp_nth(const sexp *list, size_t n);
 
+/** Return the last cons cell of list */
+struct result_sexp sexp_last(sexp *list);
+
+/** Return the last cons cell of list */
+struct result_sexp sexp_rlast(struct result_sexp list);
+
 
 /******************************** LIST PUSHERS ********************************/
 /** Create a new integer S-Expression and put it at the end of list
@@ -273,6 +279,12 @@ struct result_sexp sexp_rcdr(struct result_sexp sexp);
 const sexp *sexp_find(const sexp *s, char *atom);
 
 /** tests if sexp is nil
+
+    A sexp is nil if it meets onse of the following conditions:
+    - NULL ptr
+    - sexp_type == SEXP_NIL
+    - CDR points to itself
+    - it is a symbol, and its value is "NIL" or "nil"
 
     @return true if sexp is nil, false otherwise.*/
 bool sexp_is_nil(const sexp *sexp);

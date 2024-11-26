@@ -69,64 +69,64 @@ fail to parse the input text.  It indicates that the reader should return NULL.
 
 * Malformed Expressions - Open Groups
   - Input :: (
-    - Assert :: <RESULT_LIST_NOT_CLOSED>
+    - Assert :: @SEXP_RESULT_LIST_NOT_CLOSE
       
   - Input :: [
-    - Assert :: <RESULT_TAG_MISSING_TAG>
+    - Assert :: @SEXP_RESULT_TAG_MISSING_TAG
       
   - Input :: "
-    - Assert :: <RESULT_QUOTE_NOT_CLOSED>
+    - Assert :: @SEXP_RESULT_QUOTE_NOT_CLOSED
 
 * Malformed Expressions - Atoms
   - Input :: (5:TEST)
-    - Assert :: <RESULT_LIST_NOT_CLOSED>
+    - Assert :: @SEXP_RESULT_LIST_NOT_CLOSED
       
   - Input :: 0x12:rtxdefinitely
-    - Assert :: <RESULT_NETSTRING_MISSING_COLON>
+    - Assert :: @SEXP_RESULT_NETSTRING_MISSING_COLON
       
   - Input :: 0b 101o1o:definitely not
-    - Assert :: <RESULT_NETSTRING_MISSING_COLON>
+    - Assert :: @SEXP_RESULT_NETSTRING_MISSING_COLON
       
   - Input :: 001octal?:definitely not
-    - Assert :: <RESULT_NETSTRING_MISSING_COLON>
+    - Assert :: @SEXP_RESULT_NETSTRING_MISSING_COLON
       
   - Input :: (4ba:TEST)
-    - Assert :: <RESULT_NETSTRING_MISSING_COLON>
+    - Assert :: @SEXP_RESULT_NETSTRING_MISSING_COLON
       
   - Input :: (3foo)
-    - Assert :: <RESULT_NETSTRING_MISSING_COLON>
+    - Assert :: @SEXP_RESULT_NETSTRING_MISSING_COLON
       
 * Malformed Expressions - Trailing Garbage
   - Input :: )
-    - Assert :: <RESULT_INVALID_CHARACTER>
+    - Assert :: @SEXP_RESULT_INVALID_CHARACTER
       
   - Input :: ]
-    - Assert :: <RESULT_INVALID_CHARACTER>
+    - Assert :: @SEXP_RESULT_INVALID_CHARACTER
       
   - Input :: ())
-    - Assert :: <RESULT_TRAILING_GARBAGE>
+    - Assert :: @SEXP_RESULT_TRAILING_GARBAGE
       
   - Input :: ()()
-    - Assert :: <RESULT_TRAILING_GARBAGE>
+    - Assert :: @SEXP_RESULT_TRAILING_GARBAGE
 
 * Malformed Expressions - Tags
   - Input :: [3:TAG]
-    - Assert :: <RESULT_TAG_MISSING_SYMBOL>
+    - Assert :: @SEXP_RESULT_TAG_MISSING_SYMBOL
       
   - Input :: ([3:TAG])
-    - Assert :: <RESULT_TAG_MISSING_SYMBOL>
+    - Assert :: @SEXP_RESULT_TAG_MISSING_SYMBOL
       
   - Input :: ([3:TAG])
-    - Assert :: <RESULT_TAG_MISSING_SYMBOL>
+    - Assert :: @SEXP_RESULT_TAG_MISSING_SYMBOL
       
   - Input :: ([4:TAG1] [4:TAG2])
-    - Assert :: <RESULT_TAG_MISSING_SYMBOL>
+    - Assert :: @SEXP_RESULT_TAG_MISSING_SYMBOL
       
   - Input :: [two tags] atom
-    - Assert :: <RESULT_TAG_NOT_CLOSED>
+    - Assert :: @SEXP_RESULT_TAG_NOT_CLOSED
 
   - Input :: [] 3:TAG
-    - Assert :: <RESULT_TAG_MISSING_TAG>
+    - Assert :: @SEXP_RESULT_TAG_MISSING_TAG
 
 * Advanced Transport - Atoms
   - Input :: test

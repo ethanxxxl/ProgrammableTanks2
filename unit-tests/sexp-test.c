@@ -136,6 +136,9 @@ const char* org_item_description(const char* line, const char* item) {
  * for testing cases where the reader should return NULL, the test file should
  * have the text <NULL> as the result.  While this would be a valid atom, it is
  * reserved for this purpose.
+ *
+ * if an assert line starts with the '@' symbol, then the asser will be applied
+ * on a reader error.
  */
 struct result_void tst_reader(void) {
     static size_t current_line = 0;
@@ -180,7 +183,13 @@ struct result_void tst_reader(void) {
             line = get_file_line(current_line, buffer, line_cache);
             assert_str = org_item_description(line, "Assert");
         } while (assert_str == NULL);
-        
+
+        bool assert_error = false;
+        if (assert_str[0] == '@') {
+            assert_error = true;
+            assert_str += 1; // increment past '@'
+        }
+
         /// RUN TEST
         struct error test_error;
         char *error_source = NULL;
@@ -201,6 +210,9 @@ struct result_void tst_reader(void) {
         if (result_out.status == RESULT_ERROR) {
             // SERIALIZATION ERROR
             free_sexp(sexp);
+            result_in.ok = NULL;
+            sexp = NULL;
+            
             test_error = result_out.error;
             error_source = "SERIALIZER";
             goto log_and_continue;
@@ -229,17 +241,20 @@ struct result_void tst_reader(void) {
             fprintf(log_file, "    + Error MSG    :: %s\n", error_msg);
             fflush(log_file);
 
+            if (assert_error == true &&
+                strncmp(error_msg, assert_str, strlen(assert_str)) == 0) {
+                // pass test
+            } else if (general_result.status == RESULT_OK) {
+                general_result = fail_msg("see logs");
+            }
+            
             free(error_msg);
             free_error(test_error);
-
-            if (general_result.status == RESULT_OK)
-                general_result = fail_msg("see logs");
         }
 
         if (result_in.status == RESULT_OK)
             free_sexp(sexp);
     }
-
 
     // find the next line that has a > on it.
     fclose(log_file);

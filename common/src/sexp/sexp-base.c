@@ -42,11 +42,13 @@ struct error sexp_reader_error(enum sexp_reader_error_code code,
 
     if (input != NULL) {
         size_t len = strlen(input);
-        err->input = malloc(len);
+        err->input = malloc(len +1);
         if (err->input == NULL)
             goto return_error;
         
         memcpy(err->input, input, len);
+        err->input[len] = 0;
+        
         err->location = err->input + (location - input);
     }
 
@@ -63,11 +65,18 @@ char *describe_sexp_reader_error(void *self) {
     char *description;
     if (err->input == NULL)
         asprintf(&description, "%s", g_reflected_sexp_reader_error_code[err->code]);
-    else
-        asprintf(&description, "%s\n%s\n%*c^",
+    else {
+        size_t arrow_len = err->location - err->input;
+        char arrow_body[arrow_len];
+        memset(arrow_body, '~', arrow_len);
+        arrow_body[arrow_len] = 0;
+
+        asprintf(&description, "%s\n%s\n%s^",
                  g_reflected_sexp_reader_error_code[err->code],
                  err->input,
-                 (s32)(err->location - err->input), '~');
+                 arrow_body);
+    }
+
 
     return description;
 }

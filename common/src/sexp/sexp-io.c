@@ -13,7 +13,6 @@
 /** reads an attom from the string and returns a pointer to the sexp. */
 struct result_sexp
 sexp_read_atom(const char **caller_cursor,
-               sexp *parent,
                enum sexp_memory_method method) {
     const char* cursor = *caller_cursor;
     while (isspace(*cursor) && *cursor != '\0') cursor++;
@@ -49,8 +48,9 @@ sexp_read_atom(const char **caller_cursor,
         atom_data.str = digit_end+1;
         atom_length = atom_number_value;
         is_netstring = true;
+        symbol_is_escaped = true;
         
-        *caller_cursor = digit_end + atom_number_value + 1;
+        cursor = digit_end + atom_number_value + 1;
         
     }  else if (digit_end != cursor && (isspace(*digit_end) || *digit_end == ')')) {
         // NUMBER
@@ -58,7 +58,7 @@ sexp_read_atom(const char **caller_cursor,
         atom_data.integer = atom_number_value;
         atom_length = sizeof(s32);
         
-        *caller_cursor = digit_end;
+        cursor = digit_end;
 
     } else if (digit_end != cursor && *digit_end != ':') {
         // ERROR CASE
@@ -94,7 +94,7 @@ sexp_read_atom(const char **caller_cursor,
     } else {
         // SYMBOL
         atom_type = SEXP_SYMBOL;
-        atom_data.str = digit_end+1;
+        atom_data.str = digit_end;
         atom_length = 0; // filled in next subsequent block
         
         delims = "\0 ()[]\"";
@@ -115,68 +115,43 @@ sexp_read_atom(const char **caller_cursor,
 
         // skip past the terminator, unless this is a regular symbol.
         if (should_skip_terminator == true) {
-            *caller_cursor = atom_type == SEXP_SYMBOL ? cursor : cursor + 1;        
+            cursor = cursor + 1;
         }
     }
 
-    // BUG: This currently doesn't work for netstrings that have null characters
-    // embedded in them!
+    char null_terminated_str[atom_length + 1];
+    if (atom_type == SEXP_SYMBOL || atom_type == SEXP_STRING) {
+        // BUG: This currently doesn't work for netstrings that have null
+        // characters embedded in them!
 
-    // copy atom data into temporary buffer (so that it is null terminated.)
-    char tmp_data[atom_length + 1];
-    memcpy(tmp_data, atom_data.str, atom_length);
-    tmp_data[atom_length] = '\0';
+        // copy atom data into temporary buffer (so that it is null terminated.)
+        memcpy(null_terminated_str, atom_data.str, atom_length);
+        null_terminated_str[atom_length] = '\0';
+    }
 
     // make non-escaped symbols upper-case
-    if (atom_type == SEXP_SYMBOL && symbol_is_escaped == true) {
-        for (char *c = tmp_data; c < tmp_data + atom_length; c++) {
+    if (atom_type == SEXP_SYMBOL && symbol_is_escaped == false) {
+        for (char *c = null_terminated_str;
+             c < null_terminated_str + atom_length;
+             c++) {
             *c = toupper(*c);
         }
     }
 
-    // Create sexp and copy data
-    if (parent == NULL) {
-        return make_sexp(atom_type, method, tmp_data);
-    }
+    *caller_cursor = cursor;
 
-    switch (atom_type) {
-    case SEXP_INTEGER:
-        return sexp_push_integer(parent, atom_data.integer);
-    case SEXP_SYMBOL:
-        return sexp_push_symbol(parent, tmp_data);
-    case SEXP_STRING:
-        return sexp_push_string(parent, tmp_data);
-    default:
-        return RESULT_MSG_ERROR(sexp, "Reader Feature Not Implmented");
-    }
+    if (atom_type == SEXP_INTEGER)
+        return make_sexp(atom_type, method, &atom_data.integer);
+    else
+        return make_sexp(atom_type, method, null_terminated_str);
 }
 
 /** Reads a tag from the string and returns a pointer to that sexp.*/
 struct result_sexp
 sexp_read_tagged_atom(const char **caller_cursor,
-                      sexp *parent,
                       enum sexp_memory_method method) {
     const char* cursor = *caller_cursor;
 
-    sexp *toplevel_tag;
-
-    struct result_sexp r;
-    if (parent == NULL) {
-        r = make_sexp(SEXP_TAG, method, NULL);
-
-        if (r.status == RESULT_ERROR)
-            return r;
-        
-        toplevel_tag = r.ok;
-    } else {
-        r = sexp_push_tag(parent);
-
-        if (r.status == RESULT_ERROR)
-            return r;
-        
-        toplevel_tag = r.ok;
-    }
-        
     // INFO: the details in this comment only pertain to the linear method, and
     // are slightly out of date.
     // 
@@ -188,9 +163,12 @@ sexp_read_tagged_atom(const char **caller_cursor,
 
     // ([ 3:foo ]3:bar)  ->  ([ 3:foo ]3:bar)
     // ~~⬆~~~~~~~~~~~~~  ->  ~~~~~~~~⬆~~~~~~~
-    r = sexp_read_atom(&cursor, toplevel_tag, method);
-    if (r.status == RESULT_ERROR)
-        return r;
+    struct result_sexp tag_type;
+    tag_type = sexp_read_atom(&cursor, method);
+    if (tag_type.status == RESULT_ERROR) {
+        free_error(tag_type.error);
+        return reader_err(SEXP_RESULT_TAG_MISSING_TAG, *caller_cursor, cursor);
+    }
 
     while(isspace(*cursor)) cursor++;
 
@@ -219,30 +197,38 @@ sexp_read_tagged_atom(const char **caller_cursor,
     //
     // ([ 3:foo ]3:bar)  ->  ([ 3:foo ]3:bar)
     // ~~~~~~~~~~⬆~~~~~  ->  ~~~~~~~~~~~~~~~⬆
-    r = sexp_read_atom(&cursor, toplevel_tag, method);
-    if (r.status == RESULT_ERROR)
-        return r;
+    struct result_sexp tag_value;
+    tag_value = sexp_read_atom(&cursor, method);
+    if (tag_value.status == RESULT_ERROR) {
+        free_error(tag_value.error);
+        return reader_err(SEXP_RESULT_TAG_MISSING_SYMBOL, *caller_cursor, cursor);
+    }
 
-    // udate caller cursor, and return length in of sexp (in memory)
+    struct result_sexp toplevel_tag;
+    toplevel_tag = make_sexp(SEXP_TAG, method, NULL);
+
+    toplevel_tag = sexp_rsetcar(toplevel_tag, tag_type);
+    toplevel_tag = sexp_rsetcdr(toplevel_tag, tag_value);
+
+    // update caller cursor, and return length in of sexp (in memory)
     *caller_cursor = cursor;
-    return result_sexp_ok(toplevel_tag);
+    return toplevel_tag;
 }
 
 struct result_sexp
 sexp_reader(const char **sexp_str,
-            sexp *parent,
             enum sexp_memory_method method);
 
 // list points to the first item in the list
 struct result_sexp
 sexp_read_list(const char **caller_cursor,
-               sexp *parent,
                enum sexp_memory_method method) {
     const char* cursor = *caller_cursor;
 
-    sexp *list;
-    RESULT_UNWRAP(sexp, list, make_sexp(SEXP_CONS, method, NULL));
+    struct result_sexp list = sexp_nil();
+    struct result_sexp end = list;
 
+    bool first_element = true;
     while (true) {
         // skip leading whitespace
         while (isspace(*cursor) && *cursor != '\0') cursor++; 
@@ -251,24 +237,25 @@ sexp_read_list(const char **caller_cursor,
         if (*cursor == ')') {
             cursor++;
             *caller_cursor = cursor;
-            return result_sexp_ok(list);
+            return list;
         }
+
         if (*cursor == '\0')
             return reader_err(SEXP_RESULT_LIST_NOT_CLOSED, *caller_cursor, cursor);
 
-        // TODO should this just use the result of the sexp_reader function?
-        // read the next element and append it to list.
-        RESULT_CALL(sexp, sexp_reader(&cursor,
-                                      list,
-                                      method));
+        end = sexp_rpush(end, sexp_reader(&cursor, method));
+
+        // list is initialized to nil, the first element will return a new list.
+        if (first_element == true) {
+            list = end;
+            first_element = false;
+        }
+
+        if (end.status == RESULT_ERROR)
+            break;
     }
 
-    if (parent == NULL) {
-        return result_sexp_ok(list);
-    } else {
-        sexp_push(parent, list);
-        return result_sexp_ok(list);
-    }
+    return list;
 }
 
 /** Reads the next token in an S-Expression.
@@ -284,7 +271,6 @@ sexp_read_list(const char **caller_cursor,
 */
 struct result_sexp
 sexp_reader(const char **caller_cursor,
-            sexp *parent,
             enum sexp_memory_method method) {
     const char* cursor = *caller_cursor;
     while (isspace(*cursor) && *cursor != '\0') cursor++;
@@ -318,13 +304,13 @@ sexp_reader(const char **caller_cursor,
 
     switch (token_type) {
     case LIST_OR_CONS:
-        r = sexp_read_list(&cursor, parent, method);
+        r = sexp_read_list(&cursor, method);
         break;
     case TAGGED_ATOM:
-        r = sexp_read_tagged_atom(&cursor, parent, method);
+        r = sexp_read_tagged_atom(&cursor, method);
         break;
     case ATOM:
-        r = sexp_read_atom(&cursor, parent, method);
+        r = sexp_read_atom(&cursor, method);
         break;
     }
 
@@ -344,7 +330,7 @@ sexp_read(const char *sexp_str, enum sexp_memory_method method) {
     if (*cursor == ')')
         return reader_err(SEXP_RESULT_INVALID_CHARACTER, sexp_str, cursor);
 
-    r = sexp_reader(&cursor, NULL, method);
+    r = sexp_reader(&cursor, method);
 
     if (r.status == RESULT_ERROR)
         return r;
@@ -405,32 +391,45 @@ sexp_serialize_symbol(const sexp *sexp, vector *buffer) {
     if (sexp_type(sexp) != SEXP_SYMBOL)
         return RESULT_MSG_ERROR(s32, "sexp type is %s, not SEXP_SYMBOL",
                                 g_reflected_sexp_type[sexp_type(sexp)]);
-                                
-    s32 buffer_space = vec_cap(buffer) - vec_len(buffer);
-    s32 bytes_written = 0;
+                               
 
-    do {
-        bytes_written = snprintf((char *)vec_last(buffer) + 1,
-                                 buffer_space,
-                                 "%.*s",
-                                 sexp->data_length,
-                                 sexp->data);
+    enum {NORMAL, ESCAPED, NETSTRING} representation = NORMAL; 
+    
+    for (s32 c = 0; c < sexp->data_length && sexp->data[c] != '\0'; c++) {
+        if (islower(sexp->data[c]) && representation == NORMAL)
+            representation = ESCAPED;
 
-        if (bytes_written > buffer_space) {
-            s32 r = vec_reserve(buffer, vec_len(buffer) + bytes_written + 1);
-            if (r == -1)
-                return RESULT_MSG_ERROR(s32, "vector resize failed");
-
-            buffer_space = vec_cap(buffer) - vec_len(buffer);
-
-            continue;
+        if (sexp->data[c] == '|') {
+            representation = NETSTRING;
+            break;
         }
+    }
 
-        vec_resize(buffer, vec_len(buffer) + bytes_written);
-        break;
-    } while(true);
+    s32 size_start = vec_len(buffer);
+    if (representation == ESCAPED)
+        vec_push(buffer, "|");
 
-    return result_s32_ok(bytes_written);
+    // could use sexp->data-len here, but if the string is improperly formatted,
+    // it could screw up the formatting of the output.
+    s32 symbol_len = strlen((char*)sexp->data);
+
+    if (representation == NETSTRING) {
+        // I am using malloc here because I am lazy.
+        char *netstring_header;
+        s32 header_len = asprintf(&netstring_header, "%d:", symbol_len);
+        vec_pushn(buffer, netstring_header, header_len);
+        free(netstring_header);
+    }
+
+    // copy all string data to the buffer.  Return allocation errors.
+    s32 r = vec_pushn(buffer, sexp->data, symbol_len);
+    if (r < 0)
+        return RESULT_MSG_ERROR(s32, "vector resize failed");
+    
+    if (representation == ESCAPED)
+        vec_push(buffer, "|");
+
+    return result_s32_ok(vec_len(buffer) - size_start);
 }
 
 struct result_s32
@@ -442,45 +441,33 @@ sexp_serialize_tag(const sexp *sexp, vector *buffer) {
         return RESULT_MSG_ERROR(s32, "sexp type is %s not SEXP_TAG",
                                 g_reflected_sexp_type[sexp_type(sexp)]);
 
-    struct result_sexp r;
     const struct sexp* tag;
     const struct sexp* atom;
 
     // get tag
-    r = sexp_tag_get_tag(sexp);
-    if (r.status == RESULT_ERROR)
-        return result_s32_error(r.error);
-    tag = r.ok;
+    RESULT_UNWRAP(s32, tag, sexp_tag_get_tag(sexp));
 
     // get atom
-    r = sexp_tag_get_atom(sexp);
-    if (r.status == RESULT_ERROR)
-        return result_s32_error(r.error);
-    atom = r.ok;
+    RESULT_UNWRAP(s32, atom, sexp_tag_get_atom(sexp));
 
-    size_t buffer_space = vec_cap(buffer) - vec_len(buffer);
-    size_t bytes_written = 0;
+    s32 size_start = vec_len(buffer);
 
-    do {
-        bytes_written = snprintf((char *)vec_last(buffer) + 1,
-                                 buffer_space,
-                                 "[%.*s]%.*s",
-                                 tag->data_length, tag->data,
-                                 atom->data_length, atom->data);
-
-        if (bytes_written > buffer_space) {
-            s32 r = vec_reserve(buffer, vec_len(buffer) + bytes_written);
-            if (r == -1)
-                return RESULT_MSG_ERROR(s32, "vector capacity increase failed");
-
-            continue;
-        }
-
-        vec_resize(buffer, vec_len(buffer) + bytes_written);
-        break;
-    } while (true);
+    s32 e;
+    e = vec_push(buffer, "[");
+    if (e < 0) goto allocation_error;
     
-    return result_s32_ok(bytes_written);
+    RESULT_CALL(s32, sexp_serialize_symbol(tag, buffer));
+    
+    e = vec_push(buffer, "]");
+    if (e < 0) goto allocation_error;
+    
+    RESULT_CALL(s32, sexp_serialize_symbol(atom, buffer));
+
+    return result_s32_ok(vec_len(buffer) - size_start);
+    
+ allocation_error:
+    return RESULT_MSG_ERROR(s32, "failed to allocate space in buffer!\ncontents: %s",
+                            vec_dat(buffer));
 }
     
 struct result_s32
@@ -492,29 +479,25 @@ sexp_serialize_string(const sexp *sexp, vector *buffer) {
         return RESULT_MSG_ERROR(s32, "sexp type is %s, not SEXP_STRING",
                                 g_reflected_sexp_type[sexp_type(sexp)]);
 
-    s32 buffer_space = vec_cap(buffer) - vec_len(buffer);
-    s32 bytes_written = 0;
+    s32 size_start = vec_len(buffer);
+    s32 len = strlen((char *)sexp->data);
 
-    do {
-        bytes_written = snprintf((char *)vec_last(buffer) + 1,
-                                 buffer_space,
-                                 "\"%s\"", (char*)sexp->data);
+    s32 e;
+    // BUG characters in the string may need to be escaped
+    e = vec_push(buffer, "\"");
+    if (e < 0) goto allocation_error;
 
-        if (bytes_written > buffer_space) {
-            s32 r = vec_reserve(buffer, vec_len(buffer) + bytes_written + 1);
-            if (r == -1)
-                return RESULT_MSG_ERROR(s32, "vector resize failed");
+    e = vec_pushn(buffer, sexp->data, len);
+    if (e < 0) goto allocation_error;
 
-            buffer_space = vec_cap(buffer) - vec_len(buffer);
+    e = vec_push(buffer, "\"");
+    if (e < 0) goto allocation_error;
 
-            continue;
-        }
+    return result_s32_ok(vec_len(buffer) - size_start);
 
-        vec_resize(buffer, vec_len(buffer) + bytes_written);
-        break;
-    } while(true);
-
-    return result_s32_ok(bytes_written);
+ allocation_error:
+    return RESULT_MSG_ERROR(s32, "failed to allocate space in buffer!\ncontents: %s",
+                            vec_dat(buffer));
 }
 
 struct result_s32
@@ -605,6 +588,8 @@ struct result_vec sexp_serialize_vec(const sexp *sexp) {
     if (r.status == RESULT_ERROR)
         return result_vec_error(r.error);
 
+    vec_push(buffer, "\0");
+    vec_push(buffer, "\0");
     return result_vec_ok(buffer);
 }
 

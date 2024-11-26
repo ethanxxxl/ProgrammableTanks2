@@ -54,10 +54,11 @@ struct result_sexp sexp_setcar(sexp *dst, sexp *car) {
     if (dst->is_linear == true)
         return RESULT_MSG_ERROR(sexp, "Not Implemented for linear sexp");
     
-    if (dst->sexp_type != SEXP_CONS)
-        return RESULT_MSG_ERROR(sexp, "dst is %s, not a %s",
+    if (dst->sexp_type != SEXP_CONS && sexp_type(dst) != SEXP_TAG)
+        return RESULT_MSG_ERROR(sexp, "dst is %s, not a %s or %s",
                                 g_reflected_sexp_type[dst->sexp_type],
-                                g_reflected_sexp_type[SEXP_CONS]);
+                                g_reflected_sexp_type[SEXP_CONS],
+                                g_reflected_sexp_type[SEXP_TAG]);
 
     ((union sexp_data *)dst->data)->cons.car = car;
 
@@ -82,10 +83,11 @@ struct result_sexp sexp_setcdr(sexp *dst, sexp *cdr) {
     if (sexp_is_nil(dst))
         return RESULT_MSG_ERROR(sexp, "NIL is not a valid destination");
 
-    if (dst->sexp_type != SEXP_CONS)
-        return RESULT_MSG_ERROR(sexp, "dst is %s, not a %s",
+    if (sexp_type(dst) != SEXP_CONS && sexp_type(dst) != SEXP_TAG)
+        return RESULT_MSG_ERROR(sexp, "dst is %s, not a %s or %s",
                                 g_reflected_sexp_type[dst->sexp_type],
-                                g_reflected_sexp_type[SEXP_CONS]);
+                                g_reflected_sexp_type[SEXP_CONS],
+                                g_reflected_sexp_type[SEXP_TAG]);
 
     if (dst->is_linear == true)
         return RESULT_MSG_ERROR(sexp, "Not Implmented for linear sexp");
@@ -178,17 +180,21 @@ struct result_str sexp_sym_val(const sexp *s) {
 }
 
 bool sexp_is_nil(const sexp *s) {
+    // NULL pointer is considered NIL, as well as a NIL sexp_type.
     if (s == NULL || s->sexp_type == SEXP_NIL)
         return true;
 
-    if (s->sexp_type != SEXP_CONS)
-        return false;
+    // the symbol 'nil or 'NIL is also considered nil
+    if (s->sexp_type == SEXP_SYMBOL && (strcmp("nil", (char*)s->data) == 0 ||
+                                        strcmp("NIL", (char*)s->data) == 0)) {
+        return true;
+    }
 
     // can't use sexp_cdr here, because sexp_cdr uses this function.
     struct cons *cons_data = (struct cons *)s->data;
-    sexp *cdr = cons_data->cdr;
 
-    if (cdr == s)
+    // self referencial case
+    if (cons_data->cdr == s)
         return true;
 
     return false;
@@ -238,6 +244,13 @@ struct result_sexp sexp_last(sexp *s) {
     }
 
     return result_sexp_ok(last);
+}
+
+struct result_sexp sexp_rlast(struct result_sexp list) {
+    if (list.status == RESULT_ERROR)
+        return list;
+
+    return sexp_last(list.ok);
 }
 
 struct result_sexp
@@ -347,13 +360,23 @@ sexp_length(const sexp *s) {
     return result_u32_ok(n);
 }
 
+// when list is nil, that is the same as passing an empty list.  returns the end
+// cons that was constructed to hold the data.  if list is NIL, but is not NULL,
+// then the existing cons will be repurposed for the list element.
 struct result_sexp _sexp_push_data(sexp *list, enum sexp_type type, void* data) {
     sexp *end;
-    RESULT_UNWRAP(sexp, end, sexp_last(list));
-    if (sexp_is_nil(end))
-        return RESULT_MSG_ERROR(sexp, "NIL is not a valid destination");
+    if (list == NULL) {
+        RESULT_UNWRAP(sexp, end, make_cons_sexp());
+    } else if (sexp_is_nil(list)) {
+        list->sexp_type = SEXP_CONS;
+        RESULT_CALL(sexp, sexp_rsetcar(result_sexp_ok(list), sexp_nil()));
+        RESULT_CALL(sexp, sexp_rsetcdr(result_sexp_ok(list), sexp_nil()));
+        end = list;
+    } else {
+        RESULT_UNWRAP(sexp, end, sexp_last(list));
+    }
 
-    enum sexp_memory_method mem_method = list->is_linear ?
+    enum sexp_memory_method mem_method = end->is_linear ?
         SEXP_MEMORY_LINEAR : SEXP_MEMORY_TREE;
 
     sexp *new_end;
@@ -387,29 +410,48 @@ struct result_sexp sexp_push_tag(sexp *list) {
 
 
 struct result_sexp sexp_tag_get_tag(const sexp *s) {
-    (void)s;
-    return RESULT_MSG_ERROR(sexp, "not implemented");
+    if (sexp_type(s) != SEXP_TAG)
+        return RESULT_MSG_ERROR(sexp, "dst is %s, not a %s",
+                                g_reflected_sexp_type[s->sexp_type],
+                                g_reflected_sexp_type[SEXP_TAG]);
+
+    struct cons cons = ((union sexp_data*)s->data)->cons;
+    return result_sexp_ok(cons.car);
 }
 
 struct result_sexp sexp_tag_get_atom(const sexp *s) {
-    (void)s;
-    return RESULT_MSG_ERROR(sexp, "not implemented");
+    if (sexp_type(s) != SEXP_TAG)
+        return RESULT_MSG_ERROR(sexp, "dst is %s, not a %s",
+                                g_reflected_sexp_type[s->sexp_type],
+                                g_reflected_sexp_type[SEXP_TAG]);
+
+    struct cons cons = ((union sexp_data*)s->data)->cons;
+    return result_sexp_ok(cons.cdr);
 }
 
 
 struct result_sexp sexp_push(sexp *list, sexp *item) {
-    if (sexp_is_nil(list))
-        return RESULT_MSG_ERROR(sexp, "NIL is not a valid destination");
+    struct result_sexp old_end;
+    if (list == NULL) {
+        old_end = make_cons_sexp();
+    } else if (sexp_is_nil(list)) {
+        list->sexp_type = SEXP_CONS;
+        old_end = sexp_rsetcar(result_sexp_ok(list), sexp_nil());
+        old_end = sexp_rsetcdr(result_sexp_ok(list), sexp_nil());
+    } else {
+        old_end = sexp_last(list);
+    }
 
-    if (list->is_linear || item->is_linear)
+    if (old_end.status == RESULT_ERROR)
+        return old_end;
+
+    if (old_end.ok->is_linear || (item != NULL && item->is_linear))
         return RESULT_MSG_ERROR(sexp, "Not Implemented for linear sexps");
 
-    sexp *old_end;
     // add a new element to end of the list.  The original end will be returned.
-    RESULT_UNWRAP(sexp, old_end,
-                  sexp_rsetcdr(sexp_last(list), make_cons_sexp()));
+    old_end = sexp_rsetcdr(old_end, make_cons_sexp());
 
-    return sexp_rsetcar(sexp_last(old_end), result_sexp_ok(item));
+    return sexp_rsetcar(sexp_rlast(old_end), result_sexp_ok(item));
 }
 
 struct result_sexp sexp_rpush(struct result_sexp list, struct result_sexp item) {
